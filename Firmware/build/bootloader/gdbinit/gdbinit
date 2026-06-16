@@ -1,0 +1,2 @@
+source D:/AI-Agent-Deck/Firmware/build/bootloader/gdbinit/symbols
+source D:/AI-Agent-Deck/Firmware/build/bootloader/gdbinit/connect

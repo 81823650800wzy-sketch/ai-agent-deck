@@ -1,0 +1,35 @@
+{
+    "device_name": "AI Agent Deck",
+    "keys": {
+        "a": {
+            "name": "ChatGPT",
+            "action": "open_url",
+            "url": "https://chat.openai.com"
+        },
+        "b": {
+            "name": "Claude",
+            "action": "command",
+            "command": "start cmd /k \"echo Claude Ready && pause\""
+        },
+        "c": {
+            "name": "Cursor",
+            "action": "command",
+            "command": "notepad"
+        },
+        "d": {
+            "name": "Voice",
+            "action": "command",
+            "command": "start ms-settings:speech"
+        },
+        "e": {
+            "name": "Terminal",
+            "action": "command",
+            "command": "start cmd"
+        },
+        "f": {
+            "name": "Explorer",
+            "action": "command",
+            "command": "explorer"
+        }
+    }
+}

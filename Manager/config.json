@@ -1,0 +1,47 @@
+{
+    "device_name": "AI Agent Deck",
+    "keys": {
+        "F13": {
+            "name": "ChatGPT",
+            "action": "open_url",
+            "url": "https://chat.openai.com",
+            "description": "Open ChatGPT in browser"
+        },
+        "F14": {
+            "name": "Claude",
+            "action": "script",
+            "script": "open_claude.bat",
+            "description": "Open Claude via CMD"
+        },
+        "F15": {
+            "name": "Cursor",
+            "action": "command",
+            "command": "cursor",
+            "description": "Open Cursor editor"
+        },
+        "F16": {
+            "name": "Voice",
+            "action": "command",
+            "command": "start ms-settings:speech",
+            "description": "Open Windows voice settings"
+        },
+        "F17": {
+            "name": "Terminal",
+            "action": "command",
+            "command": "start cmd",
+            "description": "Open command prompt"
+        },
+        "F18": {
+            "name": "Explorer",
+            "action": "command",
+            "command": "explorer",
+            "description": "Open File Explorer"
+        }
+    },
+    "scripts": {
+        "open_claude.bat": {
+            "content": "@echo off\r\nstart cmd /k \"cd /d %USERPROFILE% && echo Starting Claude... && claude\"",
+            "description": "Open Claude CLI"
+        }
+    }
+}
