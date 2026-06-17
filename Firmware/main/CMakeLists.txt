@@ -11,4 +11,5 @@ idf_component_register(
         ble_img
         gifdec
         ui
+        profile_receiver
 )

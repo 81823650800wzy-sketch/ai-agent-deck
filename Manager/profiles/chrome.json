@@ -1,0 +1,45 @@
+{
+  "name": "Chrome",
+  "process_names": [
+    "chrome.exe",
+    "msedge.exe"
+  ],
+  "keys": [
+    {
+      "id": "K1",
+      "display": "New Tab",
+      "action": "key_combo",
+      "value": "ctrl+t"
+    },
+    {
+      "id": "K2",
+      "display": "Close",
+      "action": "key_combo",
+      "value": "ctrl+w"
+    },
+    {
+      "id": "K3",
+      "display": "Reopen",
+      "action": "key_combo",
+      "value": "ctrl+shift+t"
+    },
+    {
+      "id": "K4",
+      "display": "Bookmark",
+      "action": "key_combo",
+      "value": "ctrl+d"
+    },
+    {
+      "id": "K5",
+      "display": "DevTools",
+      "action": "key_combo",
+      "value": "f12"
+    },
+    {
+      "id": "K6",
+      "display": "Find",
+      "action": "key_combo",
+      "value": "ctrl+f"
+    }
+  ]
+}

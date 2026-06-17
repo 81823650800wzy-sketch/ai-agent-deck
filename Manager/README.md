@@ -1,180 +1,145 @@
-# AI Agent Deck Manager - Complete Guide
+# AI Agent Deck Manager V2.0
 
-## Overview
+Context-Aware Workflow Controller — 桌面端管理软件
 
-This system consists of two parts:
-1. **ESP32 Device** - Sends F13-F18 key signals via BLE HID
-2. **PC Manager** - Listens for these keys and executes actions
+## 核心功能
 
-## Step-by-Step Setup
+**自动识别当前软件 → 自动切换 Profile → 屏幕实时反馈**
 
-### Step 1: Flash Device Firmware
+```
+用户打开 VSCode
+    ↓
+设备自动切换: Programming Mode
+    K1 Undo | K2 Build | K3 Debug | K4 Review | K5 Terminal | K6 Explain
 
-The device firmware has already been flashed. It sends F13-F18 keys when buttons are pressed.
-
-### Step 2: Pair Bluetooth
-
-1. Open Windows Settings (Win + I)
-2. Go to **Bluetooth & devices**
-3. Click **Add device** → **Bluetooth**
-4. Find **AI Agent Deck** and click to pair
-5. Wait for pairing to complete
-
-### Step 3: Test Key Detection
-
-Before using the manager, test if keys are being received:
-
-```bash
-python test_keys.py
+用户切换 Blender
+    ↓
+设备自动切换: Blender Mode
+    K1 Bevel | K2 Extrude | K3 Grab | K4 Modifier | K5 Render | K6 Explain
 ```
 
-Then press buttons on the device. You should see:
+## 架构
+
 ```
-Key pressed: f13 (KeyCode.f13)
-  >>> MATCH: F13 detected!
-```
-
-**If no keys appear:**
-- Check Bluetooth connection
-- Restart the device
-- Re-pair the device
-
-### Step 4: Run Manager
-
-```bash
-python ai_deck_gui.py
-```
-
-Or run the exe:
-```
-dist\AI_Deck_Manager.exe
-```
-
-### Step 5: Configure Actions
-
-Edit `config.json` to customize what each key does:
-
-```json
-{
-    "keys": {
-        "F13": {
-            "name": "ChatGPT",
-            "action": "command",
-            "command": "start chrome https://chat.openai.com"
-        },
-        "F14": {
-            "name": "Claude",
-            "action": "command",
-            "command": "start cmd /k \"echo Starting Claude...\""
-        }
-    }
-}
+┌─────────────────────────────────────────────────────────┐
+│                      PC Manager                         │
+│                                                         │
+│  WindowDetector ──→ ProfileManager ──→ DeviceManager    │
+│  (检测前台应用)    (匹配 Profile)    (BLE 发送)          │
+│                                                         │
+│  WorkflowManager (协调以上组件)                           │
+│  pynput (监听 F13-F18 执行动作)                          │
+└────────────────────────┬────────────────────────────────┘
+                         │ BLE GATT
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│                     ESP32 Firmware                      │
+│                                                         │
+│  ProfileReceiver ──→ g_current_profile ──→ draw_ui()    │
+│  (接收 JSON)        (全局按键映射)       (刷新屏幕)      │
+│                                                         │
+│  按键矩阵 ──→ send_keyboard_key(F13-F18) ──→ PC        │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Action Types
-
-### 1. Command
-Execute a system command:
-```json
-{
-    "action": "command",
-    "command": "notepad"
-}
-```
-
-### 2. Script
-Run a batch file:
-```json
-{
-    "action": "script",
-    "script": "my_script.bat"
-}
-```
-
-### 3. Open URL
-Open a website:
-```json
-{
-    "action": "open_url",
-    "url": "https://chat.openai.com"
-}
-```
-
-### 4. Open App
-Launch an application:
-```json
-{
-    "action": "open_app",
-    "path": "C:\\Program Files\\Cursor\\cursor.exe"
-}
-```
-
-## Example: Open Claude via CMD
-
-To open Claude by typing in cmd:
-
-1. Create script `scripts/open_claude.bat`:
-```bat
-@echo off
-start cmd /k "cd /d %USERPROFILE% && claude"
-```
-
-2. Configure in `config.json`:
-```json
-{
-    "F14": {
-        "name": "Claude",
-        "action": "script",
-        "script": "open_claude.bat"
-    }
-}
-```
-
-## Troubleshooting
-
-### No keys detected
-
-1. Check if device is paired in Bluetooth settings
-2. Run `test_keys.py` to verify key reception
-3. Check device serial output for errors
-
-### Keys detected but no action
-
-1. Check `config.json` syntax
-2. Verify script files exist in `scripts/` folder
-3. Check Windows permissions
-
-### Connection drops
-
-1. Keep device within 10 meters
-2. Avoid WiFi interference
-3. Check battery level
-
-## File Structure
+## 文件结构
 
 ```
 Manager/
-├── ai_deck_gui.py      # Main GUI application
-├── config.json         # Key mappings config
-├── test_keys.py        # Key detection test
-├── scripts/            # Action scripts
-│   ├── open_claude.bat
+├── main.py               # 入口
+├── workflow_manager.py   # 工作流协调器
+├── window_detector.py    # 活动窗口检测
+├── profile_manager.py    # Profile 管理
+├── device_manager.py     # BLE 设备通信
+├── test_workflow.py      # 端到端测试
+├── profiles/             # Profile 配置文件 (自动生成)
+│   ├── vscode.json
+│   ├── blender.json
 │   └── ...
-└── dist/               # Compiled exe
-    ├── AI_Deck_Manager.exe
-    ├── config.json
-    └── scripts/
+├── scripts/              # 自定义脚本
+├── requirements.txt      # Python 依赖
+└── ai_deck_gui.py        # 旧版 GUI (保留)
 ```
 
-## Quick Start Commands
+## 快速开始
+
+### 1. 安装依赖
 
 ```bash
-# Test key detection
-python test_keys.py
-
-# Run GUI manager
-python ai_deck_gui.py
-
-# Build exe
-pyinstaller --onefile --windowed --name "AI_Deck_Manager" --add-data "config.json;." --add-data "scripts;scripts" ai_deck_gui.py
+pip install -r requirements.txt
 ```
+
+### 2. 测试链路 (不连接设备)
+
+```bash
+python test_workflow.py           # 单次测试
+python test_workflow.py --monitor # 实时监控 (15秒)
+```
+
+### 3. 运行 (连接 ESP32)
+
+```bash
+python main.py                    # 默认 BLE 连接
+python main.py --no-ble           # 离线模式 (仅窗口检测)
+python main.py --scan             # 扫描 BLE 设备
+python main.py --debug            # 调试日志
+```
+
+## 内置 Profile
+
+| Profile | 应用 | K1 | K2 | K3 | K4 | K5 | K6 |
+|---------|------|----|----|----|----|----|----|
+| VSCode | Code.exe | Undo | Build | Debug | Review | Terminal | Explain |
+| Blender | blender.exe | Bevel | Extrude | Grab | Modifier | Render | Explain |
+| KiCad | kicad.exe | Route | Move | Rotate | DRC | Review | Annotate |
+| Word | WINWORD.EXE | Save | Bold | Undo | Find | Print | AI Write |
+| Chrome | chrome.exe | New Tab | Close | Reopen | Bookmark | DevTools | Find |
+| Default | * | Copy | Paste | Undo | Save | Select | Close |
+
+## 自定义 Profile
+
+在 `profiles/` 目录下创建 JSON 文件:
+
+```json
+{
+  "name": "MyApp",
+  "process_names": ["myapp.exe"],
+  "keys": [
+    {"id": "K1", "display": "Action1", "action": "key_combo", "value": "ctrl+shift+a"},
+    {"id": "K2", "display": "Action2", "action": "open_url", "value": "https://..."}
+  ]
+}
+```
+
+支持的动作类型:
+- `key_combo`: 组合键 (如 `ctrl+z`, `ctrl+shift+b`, `f5`)
+- `command`: 执行命令 (如 `cursor`, `start cmd`)
+- `open_url`: 打开网页
+- `script`: 运行 scripts/ 目录下的脚本
+
+## BLE 通信协议
+
+PC → ESP32 JSON 格式:
+
+```json
+{
+  "cmd": "profile",
+  "data": {
+    "name": "VSCode",
+    "keys": [
+      {"id": "K1", "display": "Undo", "action": "ctrl+z"},
+      {"id": "K2", "display": "Build", "action": "ctrl+shift+b"}
+    ]
+  }
+}
+```
+
+ESP32 收到后:
+1. 解析 JSON
+2. 更新 `g_current_profile`
+3. 刷新屏幕显示
+4. 按键发送 F13-F18 到 PC
+
+## 旧版 GUI
+
+旧版 `ai_deck_gui.py` 仍可用，但已被新版 `main.py` 替代。

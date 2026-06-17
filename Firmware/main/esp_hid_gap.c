@@ -7,6 +7,8 @@
 
 static const char *TAG = "ESP_HID_GAP";
 
+static bool adv_data_configured = false;
+
 static esp_ble_adv_params_t hid_adv_params = {
     .adv_int_min        = 0x20,
     .adv_int_max        = 0x30,
@@ -91,8 +93,30 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
     return ESP_OK;
 }
 
+void esp_hid_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
+{
+    switch (event) {
+        case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
+            ESP_LOGI(TAG, "Adv data configured, status=%d", param->adv_data_cmpl.status);
+            adv_data_configured = true;
+            /* 自动启动广播 */
+            esp_ble_gap_start_advertising(&hid_adv_params);
+            break;
+        case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
+            ESP_LOGI(TAG, "Advertising start complete, status=%d", param->adv_start_cmpl.status);
+            break;
+        default:
+            break;
+    }
+}
+
 esp_err_t esp_hid_ble_gap_adv_start(void)
 {
     ESP_LOGI(TAG, "Starting advertising");
-    return esp_ble_gap_start_advertising(&hid_adv_params);
+    if (adv_data_configured) {
+        return esp_ble_gap_start_advertising(&hid_adv_params);
+    }
+    /* 如果数据还没配置好，等 GAP 回调自动启动 */
+    ESP_LOGI(TAG, "Waiting for adv data configuration...");
+    return ESP_OK;
 }

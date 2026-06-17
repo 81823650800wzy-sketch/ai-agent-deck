@@ -1,0 +1,44 @@
+{
+  "name": "Word",
+  "process_names": [
+    "WINWORD.EXE"
+  ],
+  "keys": [
+    {
+      "id": "K1",
+      "display": "Save",
+      "action": "key_combo",
+      "value": "ctrl+s"
+    },
+    {
+      "id": "K2",
+      "display": "Bold",
+      "action": "key_combo",
+      "value": "ctrl+b"
+    },
+    {
+      "id": "K3",
+      "display": "Undo",
+      "action": "key_combo",
+      "value": "ctrl+z"
+    },
+    {
+      "id": "K4",
+      "display": "Find",
+      "action": "key_combo",
+      "value": "ctrl+f"
+    },
+    {
+      "id": "K5",
+      "display": "Print",
+      "action": "key_combo",
+      "value": "ctrl+p"
+    },
+    {
+      "id": "K6",
+      "display": "AI Write",
+      "action": "key_combo",
+      "value": "ctrl+shift+i"
+    }
+  ]
+}

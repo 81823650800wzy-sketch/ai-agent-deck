@@ -1,0 +1,46 @@
+{
+  "name": "KiCad",
+  "process_names": [
+    "kicad.exe",
+    "pcbnew.exe",
+    "eeschema.exe"
+  ],
+  "keys": [
+    {
+      "id": "K1",
+      "display": "Route",
+      "action": "key_combo",
+      "value": "x"
+    },
+    {
+      "id": "K2",
+      "display": "Move",
+      "action": "key_combo",
+      "value": "m"
+    },
+    {
+      "id": "K3",
+      "display": "Rotate",
+      "action": "key_combo",
+      "value": "r"
+    },
+    {
+      "id": "K4",
+      "display": "DRC",
+      "action": "key_combo",
+      "value": "f8"
+    },
+    {
+      "id": "K5",
+      "display": "Review",
+      "action": "key_combo",
+      "value": "f9"
+    },
+    {
+      "id": "K6",
+      "display": "Annotate",
+      "action": "key_combo",
+      "value": "f6"
+    }
+  ]
+}

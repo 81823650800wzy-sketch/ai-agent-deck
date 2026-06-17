@@ -1,0 +1,44 @@
+{
+  "name": "VSCode",
+  "process_names": [
+    "Code.exe"
+  ],
+  "keys": [
+    {
+      "id": "K1",
+      "display": "Undo",
+      "action": "key_combo",
+      "value": "ctrl+z"
+    },
+    {
+      "id": "K2",
+      "display": "Build",
+      "action": "key_combo",
+      "value": "ctrl+shift+b"
+    },
+    {
+      "id": "K3",
+      "display": "Debug",
+      "action": "key_combo",
+      "value": "f5"
+    },
+    {
+      "id": "K4",
+      "display": "Review",
+      "action": "key_combo",
+      "value": "ctrl+shift+p"
+    },
+    {
+      "id": "K5",
+      "display": "Terminal",
+      "action": "key_combo",
+      "value": "ctrl+`"
+    },
+    {
+      "id": "K6",
+      "display": "Explain",
+      "action": "key_combo",
+      "value": "ctrl+k ctrl+i"
+    }
+  ]
+}

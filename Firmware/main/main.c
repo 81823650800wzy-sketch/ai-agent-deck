@@ -1,10 +1,10 @@
 /**
- * AI Agent Deck V1.0 - BLE HID 键盘 + UI 系统
+ * AI Agent Deck V2.0 - Context-Aware Workflow Controller
  *
  * 功能:
- *   - BLE 无线键盘
- *   - 真实 AI 工具快捷键映射
- *   - 状态显示界面
+ *   - BLE HID 键盘 (F13-F18)
+ *   - BLE Profile 接收 (自动切换按键映射)
+ *   - 实时 UI 显示当前 Profile
  *
  * 接线:
  *   屏幕: MOSI→GPIO11  SCLK→GPIO12  CS→GPIO10
@@ -25,6 +25,7 @@
 #include "esp_hid_gap.h"
 #include "st7789.h"
 #include "font5x7.h"
+#include "profile_receiver.h"
 
 static const char *TAG = "AI_DECK";
 
@@ -60,6 +61,12 @@ static const char *TAG = "AI_DECK";
 #define COLOR_PURPLE    RGB565(139, 92, 246)
 #define COLOR_BLUE      RGB565(59, 130, 246)
 
+/* ── 按键颜色表 (每个按键独立颜色) ────────── */
+static const uint16_t key_colors[PROFILE_MAX_KEYS] = {
+    COLOR_GREEN, COLOR_PURPLE, COLOR_BLUE,
+    COLOR_YELLOW, COLOR_RED, COLOR_DIM,
+};
+
 /* ── 按键矩阵 ────────────────────────────── */
 static const gpio_num_t row_pins[] = {ROW1_PIN, ROW2_PIN, ROW3_PIN};
 static const gpio_num_t col_pins[] = {COL1_PIN, COL2_PIN};
@@ -73,28 +80,14 @@ static bool key_pressed[ROW_COUNT][COL_COUNT] = {0};
 #define MOD_ALT     0x04
 #define MOD_WIN     0x08
 
-/* ── 按键功能定义 ────────────────────────── */
-typedef struct {
-    const char *name;       /* 显示名称 */
-    const char *app;        /* 目标应用 */
-    uint8_t modifier;       /* HID 修饰键 */
-    uint8_t keycode;        /* HID 键码 */
-    uint16_t color;         /* UI 颜色 */
-} key_func_t;
-
-/* 测试用普通字母键 */
-static const key_func_t key_funcs[ROW_COUNT][COL_COUNT] = {
-    /* Row 1 */
-    {{"Key1", "Test-A",   0x00, 0x04, COLOR_GREEN},   // 'a'
-     {"Key2", "Test-B",   0x00, 0x05, COLOR_PURPLE}},  // 'b'
-
-    /* Row 2 */
-    {{"Key3", "Test-C",   0x00, 0x06, COLOR_BLUE},    // 'c'
-     {"Key4", "Test-D",   0x00, 0x07, COLOR_YELLOW}},  // 'd'
-
-    /* Row 3 */
-    {{"Key5", "Test-E",   0x00, 0x08, COLOR_RED},     // 'e'
-     {"Key6", "Test-F",   0x00, 0x09, COLOR_DIM}},    // 'f'
+/* ── F13-F18 HID 键码 (固定，PC 端翻译) ─── */
+static const uint8_t fkey_codes[PROFILE_MAX_KEYS] = {
+    0x68,  /* F13 */
+    0x69,  /* F14 */
+    0x6A,  /* F15 */
+    0x6B,  /* F16 */
+    0x6C,  /* F17 */
+    0x6D,  /* F18 */
 };
 
 /* ── BLE HID 状态 ────────────────────────── */
@@ -119,15 +112,6 @@ static const uint8_t keyboard_report_map[] = {
     0x95, 0x01,        //   Report Count (1)
     0x75, 0x08,        //   Report Size (8)
     0x81, 0x03,        //   Input (Const,Var,Abs)
-    0x95, 0x05,        //   Report Count (5)
-    0x75, 0x01,        //   Report Size (1)
-    0x05, 0x08,        //   Usage Page (LEDs)
-    0x19, 0x01,        //   Usage Minimum (Num Lock)
-    0x29, 0x05,        //   Usage Maximum (Kana)
-    0x91, 0x02,        //   Output (Data,Var,Abs)
-    0x95, 0x01,        //   Report Count (1)
-    0x75, 0x03,        //   Report Size (3)
-    0x91, 0x03,        //   Output (Const,Var,Abs)
     0x95, 0x06,        //   Report Count (6)
     0x75, 0x08,        //   Report Size (8)
     0x15, 0x00,        //   Logical Minimum (0)
@@ -264,11 +248,15 @@ static void matrix_scan(void)
 /* ── BLE 事件处理 ────────────────────────── */
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
+    /* 安全相关事件 */
     if (event == ESP_GAP_BLE_SEC_REQ_EVT) {
         esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
     } else if (event == ESP_GAP_BLE_NC_REQ_EVT) {
         esp_ble_confirm_reply(param->ble_security.ble_req.bd_addr, true);
     }
+
+    /* 转发给 GAP 模块处理广播事件 */
+    esp_hid_gap_event_handler(event, param);
 }
 
 static void ble_hidd_event_callback(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
@@ -295,17 +283,36 @@ static void ble_hidd_event_callback(void *handler_args, esp_event_base_t base, i
     }
 }
 
+/* ── 统一 GATTS 回调 (HID + Profile) ─────── */
+static void unified_gatts_handler(esp_gatts_cb_event_t event,
+                                   esp_gatt_if_t gatts_if,
+                                   esp_ble_gatts_cb_param_t *param)
+{
+    /* 调试: 打印所有事件 */
+    if (event == ESP_GATTS_WRITE_EVT || event == ESP_GATTS_READ_EVT ||
+        event == ESP_GATTS_CONNECT_EVT || event == ESP_GATTS_DISCONNECT_EVT ||
+        event == ESP_GATTS_MTU_EVT) {
+        ESP_LOGI("UNIFIED", "Event=%d gatts_if=%d", event, gatts_if);
+    }
+
+    /* 先转发给 HID 处理 */
+    esp_hidd_gatts_event_handler(event, gatts_if, param);
+
+    /* 再转发给 Profile 处理 */
+    profile_gatts_handler(event, gatts_if, param);
+}
+
 /* ── 初始化 BLE HID ──────────────────────── */
 static void ble_hid_init(void)
 {
     esp_hid_gap_init(HIDD_BLE_MODE);
     esp_ble_gap_register_callback(gap_event_handler);
     esp_hid_ble_gap_adv_init(ESP_HID_APPEARANCE_KEYBOARD, ble_hid_config.device_name);
-    esp_ble_gatts_register_callback(esp_hidd_gatts_event_handler);
+    esp_ble_gatts_register_callback(unified_gatts_handler);
     esp_hidd_dev_init(&ble_hid_config, ESP_HID_TRANSPORT_BLE, ble_hidd_event_callback, &hid_dev);
 }
 
-/* ── 发送按键 ────────────────────────────── */
+/* ── 发送按键 (F13-F18) ──────────────────── */
 static void send_keyboard_key(uint8_t modifier, uint8_t keycode)
 {
     if (!ble_connected || !hid_dev) return;
@@ -319,12 +326,15 @@ static void send_keyboard_key(uint8_t modifier, uint8_t keycode)
 
 /* ── UI 绘制 ─────────────────────────────── */
 
-/* 绘制顶部状态栏 */
-static void draw_header(void)
+/* 绘制顶部状态栏 (显示 Profile 名称) */
+void draw_header(void)
 {
     st7789_fill_rect(0, 0, LCD_W - 1, 35, COLOR_HEADER);
     draw_gradient_h(0, 0, LCD_W, 3, COLOR_ACCENT, COLOR_CYAN);
-    draw_string_centered(8, "AI AGENT DECK", COLOR_TEXT, 2);
+
+    /* 显示当前 Profile 名称 */
+    const char *title = g_current_profile.valid ? g_current_profile.name : "AI AGENT DECK";
+    draw_string_centered(8, title, COLOR_TEXT, 2);
 
     /* BLE 状态指示 */
     if (ble_connected) {
@@ -336,68 +346,59 @@ static void draw_header(void)
     }
 }
 
-/* 绘制快捷键卡片 */
-static void draw_key_card(int x, int y, int w, int h, const key_func_t *key, bool pressed)
+/* 绘制快捷键卡片 (使用 Profile 数据) */
+static void draw_key_card(int x, int y, int w, int h, int key_index, bool pressed)
 {
+    if (key_index >= g_current_profile.key_count) return;
+
+    const profile_key_t *key = &g_current_profile.keys[key_index];
+    uint16_t color = key_colors[key_index % PROFILE_MAX_KEYS];
+
     /* 背景 */
-    uint16_t bg = pressed ? key->color : COLOR_CARD;
+    uint16_t bg = pressed ? color : COLOR_CARD;
     st7789_fill_rect(x, y, x + w - 1, y + h - 1, bg);
 
     /* 边框 */
-    st7789_draw_rect(x, y, x + w - 1, y + h - 1, key->color);
+    st7789_draw_rect(x, y, x + w - 1, y + h - 1, color);
     if (pressed) {
-        st7789_draw_rect(x + 1, y + 1, x + w - 2, y + h - 2, key->color);
+        st7789_draw_rect(x + 1, y + 1, x + w - 2, y + h - 2, color);
     }
 
-    /* 按键名称 */
+    /* 按键 ID (K1-K6) */
     uint16_t text_col = pressed ? COLOR_BG : COLOR_TEXT;
     uint16_t dim_col = pressed ? COLOR_BG : COLOR_DIM;
 
-    int16_t tw = string_width(key->name, 1);
-    draw_string(x + (w - tw) / 2, y + 8, key->name, text_col, 1);
+    int16_t tw = string_width(key->id, 1);
+    draw_string(x + (w - tw) / 2, y + 6, key->id, dim_col, 1);
 
-    /* 快捷键说明 */
-    char shortcut[16] = "";
-    if (key->modifier & MOD_CTRL) strcat(shortcut, "C+");
-    if (key->modifier & MOD_SHIFT) strcat(shortcut, "S+");
-    if (key->modifier & MOD_ALT) strcat(shortcut, "A+");
-    if (key->modifier & MOD_WIN) strcat(shortcut, "W+");
-    /* 添加键名 */
-    char key_str[2] = {0};
-    if (key->keycode >= 0x04 && key->keycode <= 0x1D) {
-        key_str[0] = 'a' + (key->keycode - 0x04);
-    } else if (key->keycode == 0x28) {
-        strcpy(key_str, "N");  /* Enter */
-    } else if (key->keycode == 0x2C) {
-        strcpy(key_str, "_");  /* Space */
-    } else if (key->keycode == 0x0F) {
-        strcpy(key_str, "H");  /* Voice (Win+H) */
-    } else {
-        snprintf(key_str, sizeof(key_str), "%c", 'A' + (key->keycode % 26));
-    }
-    strcat(shortcut, key_str);
+    /* 显示名称 */
+    tw = string_width(key->display, 1);
+    draw_string(x + (w - tw) / 2, y + 18, key->display, text_col, 1);
 
-    tw = string_width(shortcut, 1);
-    draw_string(x + (w - tw) / 2, y + 22, shortcut, dim_col, 1);
-
-    /* 应用名称 */
-    tw = string_width(key->app, 1);
-    draw_string(x + (w - tw) / 2, y + 34, key->app, dim_col, 1);
+    /* 动作描述 */
+    tw = string_width(key->action, 1);
+    if (tw > w - 4) tw = w - 4;  /* 截断 */
+    draw_string(x + (w - tw) / 2, y + 32, key->action, dim_col, 1);
 }
 
 /* 绘制底部状态栏 */
-static void draw_footer(void)
+void draw_footer(void)
 {
     st7789_fill_rect(0, LCD_H - 20, LCD_W - 1, LCD_H - 1, COLOR_HEADER);
     st7789_draw_hline(0, LCD_W - 1, LCD_H - 20, COLOR_BORDER);
 
-    const char *status = ble_connected ? "CONNECTED" : "SEARCHING...";
+    char status[32];
+    if (ble_connected) {
+        snprintf(status, sizeof(status), "BLE OK | %d keys", g_current_profile.key_count);
+    } else {
+        snprintf(status, sizeof(status), "SEARCHING...");
+    }
     uint16_t color = ble_connected ? COLOR_GREEN : COLOR_DIM;
     draw_string_centered(LCD_H - 14, status, color, 1);
 }
 
-/* 绘制主界面 */
-static void draw_ui(void)
+/* 绘制主界面 (使用 Profile 数据) */
+void draw_ui(void)
 {
     st7789_fill_screen(COLOR_BG);
     draw_header();
@@ -411,13 +412,58 @@ static void draw_ui(void)
 
     for (int r = 0; r < ROW_COUNT; r++) {
         for (int c = 0; c < COL_COUNT; c++) {
-            int x = start_x + c * (card_w + gap);
-            int y = start_y + r * (card_h + 8);
-            draw_key_card(x, y, card_w, card_h, &key_funcs[r][c], key_pressed[r][c]);
+            int idx = r * COL_COUNT + c;
+            if (idx < g_current_profile.key_count) {
+                int x = start_x + c * (card_w + gap);
+                int y = start_y + r * (card_h + 8);
+                draw_key_card(x, y, card_w, card_h, idx, false);
+            }
         }
     }
 
     draw_footer();
+}
+
+/* ── 将矩阵位置映射到 Profile 按键索引 ──── */
+static int matrix_to_key_index(int row, int col)
+{
+    return row * COL_COUNT + col;  /* 0-5 */
+}
+
+/* ── 串口命令处理 (接收 PC Manager 的 Profile) ── */
+static void serial_cmd_task(void *arg)
+{
+    char line[2048];
+    int pos = 0;
+
+    ESP_LOGI(TAG, "Serial command task started");
+
+    while (1) {
+        int c = fgetc(stdin);
+        if (c == EOF) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        if (c == '\n' || c == '\r') {
+            if (pos > 0) {
+                line[pos] = '\0';
+                ESP_LOGI(TAG, "Serial cmd: %d bytes", pos);
+
+                /* 尝试解析为 JSON Profile */
+                if (strstr(line, "\"cmd\"") && strstr(line, "\"profile\"")) {
+                    ESP_LOGI(TAG, "Parsing profile JSON...");
+                    extern void parse_profile_json(const char *json_str);
+                    parse_profile_json(line);
+                } else {
+                    ESP_LOGI(TAG, "Unknown cmd: %.*s", pos > 40 ? 40 : pos, line);
+                }
+                pos = 0;
+            }
+        } else if (pos < sizeof(line) - 1) {
+            line[pos++] = c;
+        }
+    }
 }
 
 /* ── 主函数 ──────────────────────────────── */
@@ -448,11 +494,18 @@ void app_main(void)
     /* BLE HID 初始化 */
     ble_hid_init();
 
+    /* Profile 接收服务初始化 */
+    profile_receiver_init();
+
     /* 绘制界面 */
     draw_ui();
 
-    ESP_LOGI(TAG, "AI Agent Deck started");
+    /* 启动串口命令处理任务 */
+    xTaskCreate(serial_cmd_task, "serial_cmd", 8192, NULL, 5, NULL);
+
+    ESP_LOGI(TAG, "AI Agent Deck V2.0 started");
     ESP_LOGI(TAG, "BLE device: %s", ble_hid_config.device_name);
+    ESP_LOGI(TAG, "Profile: %s", g_current_profile.name);
 
     /* 主循环 */
     int loop_count = 0;
@@ -470,10 +523,16 @@ void app_main(void)
         for (int r = 0; r < ROW_COUNT; r++) {
             for (int c = 0; c < COL_COUNT; c++) {
                 if (key_pressed[r][c] && !last_key[r][c]) {
-                    const key_func_t *kf = &key_funcs[r][c];
-                    ESP_LOGI(TAG, "[KEY] %s -> %s", kf->name, kf->app);
-                    send_keyboard_key(kf->modifier, kf->keycode);
-                    fast_scan = 20;
+                    int idx = matrix_to_key_index(r, c);
+                    if (idx < g_current_profile.key_count) {
+                        const profile_key_t *kf = &g_current_profile.keys[idx];
+                        ESP_LOGI(TAG, "[KEY] %s -> %s (%s)",
+                                 kf->id, kf->display, kf->action);
+
+                        /* 发送 F13-F18 到 PC */
+                        send_keyboard_key(0x00, fkey_codes[idx]);
+                        fast_scan = 20;
+                    }
                 }
                 last_key[r][c] = key_pressed[r][c];
             }
@@ -484,16 +543,18 @@ void app_main(void)
         if (loop_count % 10 == 0) {
             draw_header();
 
-            /* 刷新按键卡片 */
             int card_w = 95, card_h = 50, gap = 8;
             int start_x = (LCD_W - card_w * 2 - gap) / 2;
             int start_y = 45;
 
             for (int r = 0; r < ROW_COUNT; r++) {
                 for (int c = 0; c < COL_COUNT; c++) {
-                    int x = start_x + c * (card_w + gap);
-                    int y = start_y + r * (card_h + 8);
-                    draw_key_card(x, y, card_w, card_h, &key_funcs[r][c], key_pressed[r][c]);
+                    int idx = matrix_to_key_index(r, c);
+                    if (idx < g_current_profile.key_count) {
+                        int x = start_x + c * (card_w + gap);
+                        int y = start_y + r * (card_h + 8);
+                        draw_key_card(x, y, card_w, card_h, idx, key_pressed[r][c]);
+                    }
                 }
             }
 

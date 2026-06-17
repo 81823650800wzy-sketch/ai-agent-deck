@@ -1,0 +1,44 @@
+{
+  "name": "Default",
+  "process_names": [
+    "*"
+  ],
+  "keys": [
+    {
+      "id": "K1",
+      "display": "Copy",
+      "action": "key_combo",
+      "value": "ctrl+c"
+    },
+    {
+      "id": "K2",
+      "display": "Paste",
+      "action": "key_combo",
+      "value": "ctrl+v"
+    },
+    {
+      "id": "K3",
+      "display": "Undo",
+      "action": "key_combo",
+      "value": "ctrl+z"
+    },
+    {
+      "id": "K4",
+      "display": "Save",
+      "action": "key_combo",
+      "value": "ctrl+s"
+    },
+    {
+      "id": "K5",
+      "display": "Select",
+      "action": "key_combo",
+      "value": "ctrl+a"
+    },
+    {
+      "id": "K6",
+      "display": "Close",
+      "action": "key_combo",
+      "value": "alt+f4"
+    }
+  ]
+}

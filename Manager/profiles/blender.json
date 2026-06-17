@@ -1,0 +1,44 @@
+{
+  "name": "Blender",
+  "process_names": [
+    "blender.exe"
+  ],
+  "keys": [
+    {
+      "id": "K1",
+      "display": "Bevel",
+      "action": "key_combo",
+      "value": "ctrl+b"
+    },
+    {
+      "id": "K2",
+      "display": "Extrude",
+      "action": "key_combo",
+      "value": "e"
+    },
+    {
+      "id": "K3",
+      "display": "Grab",
+      "action": "key_combo",
+      "value": "g"
+    },
+    {
+      "id": "K4",
+      "display": "Modifier",
+      "action": "key_combo",
+      "value": "ctrl+p"
+    },
+    {
+      "id": "K5",
+      "display": "Render",
+      "action": "key_combo",
+      "value": "f12"
+    },
+    {
+      "id": "K6",
+      "display": "Explain",
+      "action": "key_combo",
+      "value": "f1"
+    }
+  ]
+}
