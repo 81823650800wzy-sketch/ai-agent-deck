@@ -1,8 +1,3 @@
-"""
-UI 模块
-"""
-
-from .main_window import MainWindow
-from .theme import ThemeManager
-
-__all__ = ['MainWindow', 'ThemeManager']
+"""AI Agent Deck - UI 模块"""
+from .modern_window import ModernMainWindow
+from .profile_editor import ProfileEditorDialog, ProfileListManager

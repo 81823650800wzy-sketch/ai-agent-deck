@@ -925,9 +925,15 @@ class ModernMainWindow(QMainWindow):
             return False
 
     def _on_add_profile(self):
-        """添加 Profile"""
-        # TODO: 打开 Profile 编辑器
-        self._log("[INFO] Profile 编辑器待实现")
+        """打开 Profile 管理器"""
+        try:
+            from .profile_editor import ProfileListManager
+            pm = self.engine.profiles if self.engine else None
+            dlg = ProfileListManager(profile_manager=pm, parent=self)
+            dlg.profile_changed.connect(self._refresh_profile_list)
+            dlg.exec_()
+        except Exception as e:
+            self._log(f"[ERROR] 打开 Profile 管理器失败: {e}")
 
     def _on_delete_profile(self):
         """删除 Profile"""
@@ -1053,6 +1059,10 @@ class ModernMainWindow(QMainWindow):
         if self.engine.profiles:
             for name in self.engine.profiles.list_profiles():
                 self.profile_list.addItem(name)
+
+    def _refresh_profile_list(self):
+        """刷新 Profile 列表（Profile 编辑器回调）"""
+        self._update_profile_list()
 
     def _update_key_display(self, keys: list):
         """更新按键显示"""
