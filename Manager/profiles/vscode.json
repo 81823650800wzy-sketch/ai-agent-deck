@@ -6,15 +6,15 @@
   "keys": [
     {
       "id": "K1",
-      "display": "Undo",
+      "display": "保存",
       "action": "key_combo",
-      "value": "ctrl+z"
+      "value": "ctrl+s"
     },
     {
       "id": "K2",
-      "display": "Build",
+      "display": "运行",
       "action": "key_combo",
-      "value": "ctrl+shift+b"
+      "value": "f5"
     },
     {
       "id": "K3",

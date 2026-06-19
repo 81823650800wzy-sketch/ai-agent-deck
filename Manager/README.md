@@ -56,6 +56,11 @@ Manager/
 │   ├── vscode.json
 │   ├── blender.json
 │   └── ...
+├── gui/                  # GUI 模块
+│   ├── __init__.py
+│   ├── app.py            # 完整 GUI 应用
+│   ├── main_window.py    # 主窗口
+│   └── profile_editor.py # Profile 编辑器
 ├── scripts/              # 自定义脚本
 ├── requirements.txt      # Python 依赖
 └── ai_deck_gui.py        # 旧版 GUI (保留)
@@ -85,6 +90,12 @@ python main.py --scan             # 扫描 BLE 设备
 python main.py --debug            # 调试日志
 ```
 
+### 4. 测试 Profile 编辑器
+
+```bash
+python test_profile_editor.py     # 单独测试 Profile 编辑器
+```
+
 ## 内置 Profile
 
 | Profile | 应用 | K1 | K2 | K3 | K4 | K5 | K6 |
@@ -97,6 +108,16 @@ python main.py --debug            # 调试日志
 | Default | * | Copy | Paste | Undo | Save | Select | Close |
 
 ## 自定义 Profile
+
+### 方式一: GUI 编辑器 (推荐)
+
+运行 GUI 应用后，点击 "管理 Profile" 按钮，可以:
+- 新建 Profile
+- 编辑现有 Profile
+- 删除 Profile
+- 实时预览配置
+
+### 方式二: 手动编辑 JSON
 
 在 `profiles/` 目录下创建 JSON 文件:
 

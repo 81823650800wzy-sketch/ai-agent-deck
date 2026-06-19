@@ -18,6 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from workflow_manager import WorkflowManager
 from profile_manager import ProfileManager, Profile, KeyMapping
 
+# 导入 Profile 编辑器
+from .profile_editor import ProfileEditorDialog, ProfileListDialog
+
 
 class LogHandler:
     """日志处理器，将日志输出到 Text 控件"""
@@ -163,6 +166,7 @@ class AI_Deck_App:
         ttk.Button(test_btn_frame, text="发送测试 Profile", command=self._on_send_test).pack(side=tk.LEFT, padx=5)
         ttk.Button(test_btn_frame, text="清空日志", command=self._on_clear_log).pack(side=tk.LEFT, padx=5)
         ttk.Button(test_btn_frame, text="打开 Profile 文件夹", command=self._on_open_profiles).pack(side=tk.LEFT, padx=5)
+        ttk.Button(test_btn_frame, text="管理 Profile", command=self._on_manage_profiles).pack(side=tk.LEFT, padx=5)
 
         # 底部：日志区域
         log_frame = ttk.LabelFrame(main_frame, text="日志", padding="5")
@@ -309,6 +313,16 @@ class AI_Deck_App:
             os.startfile(str(profiles_dir))
         else:
             messagebox.showinfo("提示", f"Profile 文件夹不存在: {profiles_dir}")
+
+    def _on_manage_profiles(self):
+        """打开 Profile 管理对话框"""
+        if not self.workflow:
+            messagebox.showwarning("提示", "请先启动工作流")
+            return
+
+        dialog = ProfileListDialog(self.root, self.workflow.profiles)
+        dialog.show()
+        self._update_profile_list()
 
     def _on_profile_select(self, event):
         """Profile 列表选择"""

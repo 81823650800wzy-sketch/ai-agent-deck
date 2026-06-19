@@ -9,6 +9,9 @@ import threading
 import time
 from typing import Optional, Callable
 
+# 导入 Profile 编辑器
+from .profile_editor import ProfileEditorDialog, ProfileListDialog
+
 
 class MainWindow:
     """
@@ -154,6 +157,14 @@ class MainWindow:
             width=10
         ).pack(side=tk.RIGHT)
 
+        # Profile 管理按钮
+        ttk.Button(
+            status_bar,
+            text="管理 Profile",
+            command=self._on_manage_profiles,
+            width=12
+        ).pack(side=tk.RIGHT, padx=5)
+
     def _on_connect_click(self):
         """连接/断开按钮点击"""
         if not self.workflow:
@@ -172,6 +183,15 @@ class MainWindow:
         """扫描设备"""
         # TODO: 实现设备扫描对话框
         messagebox.showinfo("扫描", "正在扫描 BLE 设备...\n请查看控制台输出")
+
+    def _on_manage_profiles(self):
+        """打开 Profile 管理对话框"""
+        if not self.workflow:
+            messagebox.showwarning("提示", "请先启动工作流")
+            return
+
+        dialog = ProfileListDialog(self.root, self.workflow.profiles)
+        dialog.show()
 
     def update_device_status(self, connected: bool):
         """更新设备连接状态"""
