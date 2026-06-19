@@ -12,7 +12,7 @@ from pathlib import Path
 
 from window_detector import WindowDetector, ApplicationInfo
 from profile_manager import ProfileManager, Profile, KeyMapping
-from device_manager import DeviceManager
+from device_manager import DeviceManager, DeviceManagerSerial
 
 try:
     from pynput import keyboard as pynput_keyboard
@@ -32,10 +32,17 @@ class WorkflowManager:
     4. 监听按键执行动作
     """
 
-    def __init__(self, com_port: str = None):
+    def __init__(self, use_ble: bool = True, com_port: str = None):
         self.detector = WindowDetector(poll_interval=0.5)
         self.profiles = ProfileManager()
-        self.device = DeviceManager()
+
+        # 选择通信方式
+        if use_ble:
+            self.device = DeviceManager()
+            print("[WorkflowManager] 使用 BLE 通信")
+        else:
+            self.device = DeviceManagerSerial(port=com_port)
+            print("[WorkflowManager] 使用串口通信")
 
         self.current_profile: Profile | None = None
         self.current_app: ApplicationInfo | None = None
@@ -65,7 +72,7 @@ class WorkflowManager:
 
     def _switch_profile(self, profile: Profile, app: ApplicationInfo):
         """切换到新 Profile"""
-        print(f"[Workflow] ✅ 切换 Profile: {profile.name}")
+        print(f"[Workflow] [OK] 切换 Profile: {profile.name}")
         print(f"[Workflow] 按键映射:")
         for k in profile.keys:
             print(f"  {k.id}: {k.display} ({k.action})")
@@ -197,7 +204,7 @@ class WorkflowManager:
         # 启动窗口检测
         self.detector.start()
 
-        print("\n[WorkflowManager] ✅ 已启动，等待应用切换...")
+        print("\n[WorkflowManager] [OK] 已启动，等待应用切换...")
         print("[WorkflowManager] 打开 VSCode / Blender / KiCad 试试！\n")
 
     def stop(self):

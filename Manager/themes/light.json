@@ -1,0 +1,27 @@
+{
+  "name": "Light",
+  "description": "浅色主题",
+  "colors": {
+    "background": "#f5f5f5",
+    "foreground": "#333333",
+    "accent": "#2196f3",
+    "success": "#4caf50",
+    "warning": "#ff9800",
+    "error": "#f44336",
+    "card_bg": "#ffffff",
+    "card_border": "#e0e0e0",
+    "text_primary": "#333333",
+    "text_secondary": "#666666"
+  },
+  "fonts": {
+    "family": "Segoe UI",
+    "size": 10,
+    "title_size": 16,
+    "header_size": 12
+  },
+  "styles": {
+    "border_radius": 8,
+    "padding": 10,
+    "spacing": 5
+  }
+}

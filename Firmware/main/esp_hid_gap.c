@@ -53,6 +53,12 @@ esp_err_t esp_hid_gap_deinit(void)
     return ESP_OK;
 }
 
+/* Profile Service UUID (128-bit) */
+static uint8_t profile_service_uuid[16] = {
+    0xF0, 0xDE, 0xBC, 0x9A, 0x78, 0x56, 0x34, 0x12,
+    0x78, 0x56, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12
+};
+
 esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
 {
     ESP_LOGI(TAG, "Setting device name: %s", device_name);
@@ -71,7 +77,7 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
     ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(init_key)));
     ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(rsp_key)));
 
-    /* 配置广播数据 */
+    /* 配置广播数据 (最简配置) */
     esp_ble_adv_data_t adv_data = {
         .set_scan_rsp        = false,
         .include_name        = true,
@@ -99,7 +105,8 @@ void esp_hid_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_para
         case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
             ESP_LOGI(TAG, "Adv data configured, status=%d", param->adv_data_cmpl.status);
             adv_data_configured = true;
-            /* 自动启动广播 */
+            /* 启动广播 */
+            ESP_LOGI(TAG, "Starting advertising...");
             esp_ble_gap_start_advertising(&hid_adv_params);
             break;
         case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:

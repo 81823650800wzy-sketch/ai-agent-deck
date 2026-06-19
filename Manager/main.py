@@ -3,7 +3,8 @@ AI Agent Deck Manager - 入口
 Context-Aware Workflow Controller 桌面端
 
 用法:
-    python main.py                  # 默认 BLE 连接
+    python main.py                  # 默认 BLE 连接 + GUI
+    python main.py --cli            # 命令行模式
     python main.py --scan           # 扫描 BLE 设备
     python main.py --no-ble         # 离线模式 (仅窗口检测 + Profile)
 """
@@ -23,7 +24,10 @@ from workflow_manager import WorkflowManager
 def main():
     parser = argparse.ArgumentParser(description="AI Agent Deck Manager")
     parser.add_argument("--scan", action="store_true", help="扫描 BLE 设备")
+    parser.add_argument("--ble", action="store_true", help="使用 BLE 通信")
+    parser.add_argument("--port", type=str, help="指定串口号 (如 COM3)")
     parser.add_argument("--no-ble", dest="no_ble", action="store_true", help="离线模式")
+    parser.add_argument("--cli", action="store_true", help="命令行模式 (无 GUI)")
     parser.add_argument("--debug", action="store_true", help="调试日志")
     args = parser.parse_args()
 
@@ -39,8 +43,9 @@ def main():
         _scan_devices()
         return
 
-    # 创建工作流管理器
-    manager = WorkflowManager()
+    # 创建工作流管理器 (默认使用串口)
+    use_ble = args.ble
+    manager = WorkflowManager(use_ble=use_ble, com_port=args.port)
 
     # 信号处理
     def signal_handler(sig, frame):
@@ -58,8 +63,12 @@ def main():
                 time.sleep(1)
         except KeyboardInterrupt:
             manager.detector.stop()
-    else:
+    elif args.cli:
+        # 命令行模式
         manager.run_forever()
+    else:
+        # GUI 模式
+        _run_gui(manager)
 
 
 def _print_profile(manager, app):
@@ -72,6 +81,30 @@ def _print_profile(manager, app):
         for k in profile.keys:
             print(f"  {k.id}: {k.display}")
         print(f"{'='*40}")
+
+
+def _run_gui(manager=None):
+    """运行 GUI 模式"""
+    try:
+        from gui.app import AI_Deck_App
+
+        print("[Main] 启动 GUI 应用程序...")
+
+        # 创建应用程序
+        app = AI_Deck_App()
+
+        # 运行应用程序
+        app.run()
+
+    except ImportError as e:
+        print(f"[Main] GUI 依赖缺失: {e}")
+        print("[Main] 回退到命令行模式...")
+        if manager:
+            manager.run_forever()
+    except Exception as e:
+        print(f"[Main] GUI 启动失败: {e}")
+        if manager:
+            manager.stop()
 
 
 def _scan_devices():

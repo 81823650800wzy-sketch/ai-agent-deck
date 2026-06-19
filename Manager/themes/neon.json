@@ -1,0 +1,27 @@
+{
+  "name": "Neon",
+  "description": "霓虹主题",
+  "colors": {
+    "background": "#0a0a0a",
+    "foreground": "#00ff00",
+    "accent": "#ff00ff",
+    "success": "#00ff00",
+    "warning": "#ffff00",
+    "error": "#ff0000",
+    "card_bg": "#1a1a1a",
+    "card_border": "#00ff00",
+    "text_primary": "#00ff00",
+    "text_secondary": "#00cc00"
+  },
+  "fonts": {
+    "family": "Consolas",
+    "size": 10,
+    "title_size": 16,
+    "header_size": 12
+  },
+  "styles": {
+    "border_radius": 0,
+    "padding": 10,
+    "spacing": 5
+  }
+}

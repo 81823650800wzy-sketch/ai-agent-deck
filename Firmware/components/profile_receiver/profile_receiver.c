@@ -80,7 +80,7 @@ void parse_profile_json(const char *json_str)
 
     if (strcmp(cmd->valuestring, "ping") == 0) {
         ESP_LOGI(TAG, "Ping received");
-        profile_send_ack("pong", 0);
+        profile_send_pong();
         cJSON_Delete(root);
         return;
     }
@@ -307,6 +307,13 @@ esp_err_t profile_receiver_init(void)
 void profile_send_ack(const char *profile_name, int key_count)
 {
     ESP_LOGI(TAG, "ACK: profile=%s keys=%d", profile_name, key_count);
+    // TODO: 通过 GATT 发送 ACK 到 PC
+}
+
+void profile_send_pong(void)
+{
+    ESP_LOGI(TAG, "Pong");
+    // TODO: 通过 GATT 发送 pong 响应
 }
 
 void profile_update_keymap(const current_profile_t *profile)

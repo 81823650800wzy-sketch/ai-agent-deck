@@ -26,14 +26,28 @@ D:\AI-Agent-Deck\
 │   ├── CMakeLists.txt
 │   ├── sdkconfig.defaults
 │   ├── build.sh                   ← 构建脚本
-│   ├── partitions.csv
+│   ├── partitions.csv             ← OTA 双分区表
 │   ├── main/
 │   │   ├── CMakeLists.txt
-│   │   └── main.c                 ← 主程序 (Phase 1: 显示屏测试)
+│   │   └── main.c                 ← 主程序
 │   └── components/
 │       ├── st7789/                ← 屏幕驱动
 │       ├── ble_img/               ← BLE 图片传输服务
-│       └── gifdec/                ← GIF 解码器
+│       ├── gifdec/                ← GIF 解码器
+│       ├── wifi_ctrl/             ← WiFi 控制器 (TCP + mDNS)
+│       ├── ota_update/            ← OTA 远程更新
+│       ├── profile_receiver/      ← Profile BLE 接收
+│       ├── wallpaper/             ← 壁纸管理
+│       └── ui/                    ← UI 组件
+├── Manager/                       ← PC 桌面管理器
+│   ├── app/
+│   │   ├── core/
+│   │   │   ├── engine.py          ← 核心引擎
+│   │   │   ├── device.py          ← BLE/串口设备
+│   │   │   ├── wifi_device.py     ← WiFi 设备 (TCP)
+│   │   │   └── wallpaper_manager.py
+│   │   └── ui/                    ← PyQt5 界面
+│   └── setup_wifi.py             ← WiFi 配网工具
 ├── AndroidApp/                    ← Android APK 源码 (V2)
 └── README.md                      ← 本文档
 ```
@@ -98,6 +112,29 @@ bash build.sh monitor COM3
 ```bash
 bash build.sh flash_monitor COM3
 ```
+
+### 5. WiFi 配置 (首次配网)
+
+```bash
+# 通过串口配置 WiFi
+cd D:\AI-Agent-Deck\Manager
+python setup_wifi.py --ssid "你的WiFi" --pass "密码"
+
+# 或通过 BLE 配置
+python setup_wifi.py --ssid "你的WiFi" --pass "密码" --ble
+```
+
+### 6. 无线调试 (无需 USB)
+
+配网成功后，ESP32 只需接电源即可：
+
+| 功能 | 方式 | 说明 |
+|------|------|------|
+| 日志查看 | `telnet ai-deck.local` | 无线串口监控 |
+| 设备发现 | `ai-deck.local` (mDNS) | 自动发现 IP |
+| 命令发送 | TCP :8080 | PC Manager 自动连接 |
+| 固件更新 | OTA via WiFi | 无需 USB 烧录 |
+| HID 键盘 | BLE | 已有功能 |
 
 ## 开发阶段
 

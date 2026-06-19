@@ -12,4 +12,8 @@ idf_component_register(
         gifdec
         ui
         profile_receiver
+        wallpaper
+        wifi_ctrl
+        ota_update
+        json
 )

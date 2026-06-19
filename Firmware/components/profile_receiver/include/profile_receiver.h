@@ -44,6 +44,9 @@ void profile_gatts_handler(esp_gatts_cb_event_t event,
 /* ── 发送确认到 PC ───────────────────────── */
 void profile_send_ack(const char *profile_name, int key_count);
 
+/* ── 发送心跳响应 ─────────────────────────── */
+void profile_send_pong(void);
+
 /* ── 更新全局按键映射 ────────────────────── */
 void profile_update_keymap(const current_profile_t *profile);
 
