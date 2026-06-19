@@ -741,9 +741,32 @@ class ModernMainWindow(QMainWindow):
     def _open_flash_dialog(self):
         """打开固件烧录管理器对话框"""
         from ..core.flash_manager import FlashManager
+
+        # 烧录前断开设备连接（释放串口）
+        was_connected = False
+        if self.engine and self.engine.is_connected():
+            was_connected = True
+            self._log("[烧录] 断开设备连接以释放串口...")
+            try:
+                if self.engine.workflow and self.engine.workflow.device:
+                    self.engine.workflow.device.stop()
+            except Exception:
+                pass
+            import time
+            time.sleep(1.0)  # 等待串口释放
+
         flash_manager = FlashManager()
         dialog = FlashDialog(flash_manager, self)
         dialog.exec_()
+
+        # 烧录完成后重新连接
+        if was_connected:
+            self._log("[烧录] 重新连接设备...")
+            try:
+                if self.engine.workflow and self.engine.workflow.device:
+                    self.engine.workflow.device.start()
+            except Exception:
+                pass
 
     def _update_firmware_version(self):
         """更新固件版本信息"""

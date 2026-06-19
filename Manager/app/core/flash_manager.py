@@ -175,20 +175,31 @@ class FlashManager:
 
             self._report("erasing", 0.2, "擦除 Flash...")
 
-            # 构建参数列表
+            # 构建参数列表 (esptool v5.x 使用短横线格式)
+            bootloader_path = self._firmware_dir / "bootloader.bin"
+            partition_path = self._firmware_dir / "partition-table.bin"
+            ota_path = self._firmware_dir / "ota_data_initial.bin"
+
+            # 回退到 Firmware/build 目录
+            if not bootloader_path.exists():
+                build_dir = Path(__file__).parent.parent.parent.parent / "Firmware" / "build"
+                bootloader_path = build_dir / "bootloader.bin"
+                partition_path = build_dir / "partition-table.bin"
+                ota_path = build_dir / "ota_data_initial.bin"
+
             args = [
                 "--chip", self.CHIP,
                 "--port", port,
                 "--baud", str(self.BAUD),
-                "--before", "default_reset",
-                "--after", "hard_reset",
-                "write_flash",
-                "--flash_mode", self.FLASH_MODE,
-                "--flash_size", self.FLASH_SIZE,
-                "--flash_freq", self.FLASH_FREQ,
-                hex(self.BOOTLOADER_ADDR), str(cmd[cmd.index(hex(self.BOOTLOADER_ADDR)) + 1]),
-                hex(self.PARTITION_ADDR), str(cmd[cmd.index(hex(self.PARTITION_ADDR)) + 1]),
-                hex(self.OTA_DATA_ADDR), str(cmd[cmd.index(hex(self.OTA_DATA_ADDR)) + 1]),
+                "--before", "default-reset",
+                "--after", "hard-reset",
+                "write-flash",
+                "--flash-mode", self.FLASH_MODE,
+                "--flash-size", self.FLASH_SIZE,
+                "--flash-freq", self.FLASH_FREQ,
+                hex(self.BOOTLOADER_ADDR), str(bootloader_path),
+                hex(self.PARTITION_ADDR), str(partition_path),
+                hex(self.OTA_DATA_ADDR), str(ota_path),
                 hex(self.APP_ADDR), str(firmware_path),
             ]
 
