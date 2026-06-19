@@ -26,6 +26,7 @@ from .modern_theme import ModernColors, ModernFonts, apply_modern_style, create_
 from .setup_dialog import SetupDialog
 from .log_panel import LogPanel
 from .about_dialog import AboutDialog
+from .flash_dialog import FlashDialog
 
 logger = get_logger("ui")
 
