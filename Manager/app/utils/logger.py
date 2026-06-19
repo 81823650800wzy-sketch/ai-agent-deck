@@ -102,3 +102,43 @@ def get_logger(name: str) -> logging.Logger:
 def set_qt_signal(signal):
     """设置 Qt 信号，将日志转发到 UI"""
     _qt_handler.set_signal(signal)
+
+
+def setup_ui_bridge(log_panel):
+    """
+    将 LogPanel 桥接到 Python 日志系统
+
+    创建一个 logging.Handler，将日志消息转发到 LogPanel 控件
+    """
+    class LogPanelHandler(logging.Handler):
+        def __init__(self, panel):
+            super().__init__()
+            self._panel = panel
+            self._level_map = {
+                'DEBUG': 'DEBUG',
+                'INFO': 'INFO',
+                'WARNING': 'WARN',
+                'ERROR': 'ERROR',
+                'CRITICAL': 'ERROR',
+            }
+
+        def emit(self, record):
+            try:
+                msg = self.format(record)
+                level = self._level_map.get(record.levelname, 'INFO')
+                tag = record.name or 'root'
+
+                # 使用 QTimer 在 Qt 主线程中更新 UI
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, lambda: self._panel.add_log(level, tag, msg))
+            except Exception:
+                pass
+
+    handler = LogPanelHandler(log_panel)
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(logging.Formatter(
+        "%(message)s"
+    ))
+
+    # 添加到根日志器
+    logging.getLogger().addHandler(handler)

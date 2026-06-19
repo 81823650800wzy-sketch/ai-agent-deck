@@ -21,7 +21,7 @@ from ..version import get_version_display
 from ..core.engine import Engine, EngineState, EngineConfig, TransportMode
 from ..core.profile import Profile, KeyMapping
 from ..core.wallpaper_manager import WallpaperManager
-from ..utils.logger import get_logger
+from ..utils.logger import get_logger, setup_ui_bridge
 from .modern_theme import ModernColors, ModernFonts, apply_modern_style, create_shadow_effect, get_theme_names, set_theme
 from .setup_dialog import SetupDialog
 from .log_panel import LogPanel
