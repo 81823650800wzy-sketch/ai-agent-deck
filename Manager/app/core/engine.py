@@ -9,7 +9,7 @@ from typing import Optional, Callable, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 
-from ..log import get_logger
+from ..utils.logger import get_logger
 from .device import DeviceManager, DeviceManagerSerial
 from .wifi_device import WiFiDeviceManager
 from .profile import ProfileManager, Profile

@@ -18,6 +18,22 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Crash reports
+crashes/
+
+# IDE
+*.swp
+*.swo
 
 # Logs
 logs/

@@ -58,11 +58,7 @@ def _create_splash_pixmap() -> QPixmap:
     painter.setFont(ver_font)
     painter.drawText(0, 175, w, 25, Qt.AlignHCenter, f"v{__version__}")
 
-    # 加载提示
-    painter.setPen(QColor("#606060"))
-    load_font = QF("Segoe UI", 9)
-    painter.setFont(load_font)
-    painter.drawText(0, h - 40, w, 25, Qt.AlignHCenter, "正在初始化...")
+    # 底部留空，由 QSplashScreen.showMessage() 动态显示加载进度
 
     painter.end()
     return pixmap
@@ -110,6 +106,11 @@ def main():
         logger.warning("启动画面创建失败: %s", e)
 
     # 8. 创建引擎
+    if splash:
+        splash.showMessage("正在初始化引擎...",
+                           Qt.AlignBottom | Qt.AlignHCenter, QColor("#a0a0a0"))
+        app.processEvents()
+
     try:
         config = EngineConfig(
             transport=TransportMode.SERIAL,
@@ -131,6 +132,11 @@ def main():
         sys.exit(1)
 
     # 9. 创建主窗口
+    if splash:
+        splash.showMessage("正在加载界面...",
+                           Qt.AlignBottom | Qt.AlignHCenter, QColor("#a0a0a0"))
+        app.processEvents()
+
     try:
         from .ui.modern_window import ModernMainWindow
         window = ModernMainWindow(engine)

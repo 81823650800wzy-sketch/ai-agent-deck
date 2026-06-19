@@ -1,18 +1,18 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-deck-manager"
 version = "2.1.0"
-description = "Context-Aware Workflow Controller for ESP32"
+description = "Context-Aware Workflow Controller for ESP32 — 自动识别前台应用，切换按键映射"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     {name = "AI Agent Deck Team"},
 ]
-keywords = ["esp32", "workflow", "automation", "hid", "keyboard"]
+keywords = ["esp32", "workflow", "automation", "hid", "keyboard", "ble"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
@@ -35,6 +35,13 @@ dependencies = [
     "Pillow>=10.0.0",
     "pyserial>=3.5",
     "esptool>=4.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.0",
+    "pytest>=7.0",
+    "zeroconf>=0.100.0",
 ]
 
 [project.urls]

@@ -1,4 +1,4 @@
-# AI Agent Deck Manager V2.0
+# AI Agent Deck Manager v2.1.0
 
 Context-Aware Workflow Controller — 桌面端管理软件
 
@@ -25,12 +25,12 @@ Context-Aware Workflow Controller — 桌面端管理软件
 │                      PC Manager                         │
 │                                                         │
 │  WindowDetector ──→ ProfileManager ──→ DeviceManager    │
-│  (检测前台应用)    (匹配 Profile)    (BLE 发送)          │
+│  (检测前台应用)    (匹配 Profile)    (BLE/串口/WiFi)     │
 │                                                         │
 │  WorkflowManager (协调以上组件)                           │
 │  pynput (监听 F13-F18 执行动作)                          │
 └────────────────────────┬────────────────────────────────┘
-                         │ BLE GATT
+                         │ BLE GATT / Serial / WiFi TCP
                          ▼
 ┌─────────────────────────────────────────────────────────┐
 │                     ESP32 Firmware                      │
@@ -46,40 +46,46 @@ Context-Aware Workflow Controller — 桌面端管理软件
 
 ```
 Manager/
-├── app/                  # 应用主模块
-│   ├── __init__.py
-│   ├── main.py           # 应用入口
-│   ├── core/             # 核心引擎
-│   ├── ui/               # UI 模块
-│   ├── ai/               # AI 模块
-│   └── utils/            # 工具模块
-│       ├── crash_handler.py  # 崩溃处理器
-│       ├── logger.py         # 日志系统
-│       └── version.py        # 版本信息
-├── profiles/             # Profile 配置文件
-├── test_crash_handler.py # 崩溃处理器测试
-├── CRASH_HANDLER.md      # 崩溃处理器文档
-├── requirements.txt      # Python 依赖
-└── start.bat             # 启动脚本
+├── app/                    # 应用主模块
+│   ├── main.py             # 应用入口 (含闪屏)
+│   ├── version.py          # 版本兼容层
+│   ├── utils/              # 工具模块
+│   │   ├── version.py      # 版本单一真相源
+│   │   ├── logger.py       # 日志框架
+│   │   └── crash_handler.py # 崩溃处理
+│   ├── core/               # 核心引擎
+│   │   ├── engine.py       # 引擎
+│   │   ├── device.py       # BLE/串口设备
+│   │   ├── wifi_device.py  # WiFi 设备
+│   │   ├── profile.py      # Profile 管理
+│   │   ├── flash_manager.py # 固件烧录
+│   │   └── wallpaper_manager.py
+│   ├── ui/                 # PyQt5 UI
+│   │   ├── modern_window.py # 主窗口
+│   │   ├── modern_theme.py  # 主题系统
+│   │   ├── modern_widgets.py # 自定义组件
+│   │   ├── profile_editor.py # Profile 编辑器
+│   │   ├── setup_dialog.py  # 设置向导
+│   │   ├── about_dialog.py  # 关于对话框
+│   │   └── log_panel.py     # 日志面板
+│   ├── ai/                 # AI 推荐
+│   └── data/               # 数据分析
+├── firmware/               # 固件文件
+│   ├── ai_agent_deck.bin
+│   ├── bootloader.bin
+│   └── version.json
+├── profiles/               # Profile 配置
+├── pyproject.toml          # Python 打包配置
+├── LICENSE                 # MIT 许可证
+├── requirements.txt        # 依赖
+├── build.bat               # 构建脚本
+├── start.bat               # 启动脚本
+└── AI_Deck_Manager.spec    # PyInstaller 配置
+
+installer/
+├── AI_Deck_Manager.iss     # Inno Setup 安装包脚本
+└── build_installer.bat     # 安装包构建脚本
 ```
-
-## 崩溃处理
-
-应用内置全局异常捕获和崩溃报告系统：
-
-- 自动捕获主线程和子线程异常
-- 生成详细的崩溃报告（系统信息、调用栈、日志）
-- 显示用户友好的错误对话框
-
-崩溃报告位置：
-- Windows: `%USERPROFILE%\AppData\Local\AI-Deck-Manager\crashes\`
-
-测试崩溃处理器：
-```bash
-python test_crash_handler.py
-```
-
-详见 [CRASH_HANDLER.md](CRASH_HANDLER.md)
 
 ## 快速开始
 
@@ -89,52 +95,63 @@ python test_crash_handler.py
 pip install -r requirements.txt
 ```
 
-### 2. 测试链路 (不连接设备)
+### 2. 运行应用
 
 ```bash
-python test_workflow.py           # 单次测试
-python test_workflow.py --monitor # 实时监控 (15秒)
+# 方式一: 直接运行
+python run_app.py
+
+# 方式二: 双击启动
+start.bat
+
+# 方式三: 模块方式
+python -m app
 ```
 
-### 3. 运行 (连接 ESP32)
+### 3. 打包发布
 
 ```bash
-python main.py                    # 默认 BLE 连接
-python main.py --no-ble           # 离线模式 (仅窗口检测)
-python main.py --scan             # 扫描 BLE 设备
-python main.py --debug            # 调试日志
+# 构建 PyInstaller 包
+build.bat
+# → dist/AI_Deck_Manager/AI_Deck_Manager.exe
+
+# 创建 Windows 安装包 (需要 Inno Setup 6)
+cd installer
+build_installer.bat
+# → dist/AI_Deck_Manager_Setup_2.1.0.exe
 ```
 
-### 4. 测试 Profile 编辑器
+## 功能特性
+
+### 连接方式
+
+| 方式 | 说明 | 适用场景 |
+|------|------|----------|
+| 串口 | USB 直连，最可靠 | 开发调试 |
+| BLE | 蓝牙无线连接 | 日常使用 |
+| WiFi | TCP 网络连接 | 远程控制 |
+
+### 固件烧录
+
+主界面点击"烧录固件"按钮，或使用命令行：
 
 ```bash
-python test_profile_editor.py     # 单独测试 Profile 编辑器
+# 检测 ESP32
+python -m esptool --chip esp32s3 --port COM7 chip_id
+
+# 烧录固件
+python -m esptool --chip esp32s3 --port COM7 --baud 460800 \
+  write_flash --flash_mode dio --flash_size 8MB --flash_freq 80m \
+  0x0 firmware/bootloader.bin \
+  0x8000 firmware/partition-table.bin \
+  0x10000 firmware/ota_data_initial.bin \
+  0x20000 firmware/ai_agent_deck.bin
 ```
 
-## 内置 Profile
+### Profile 管理
 
-| Profile | 应用 | K1 | K2 | K3 | K4 | K5 | K6 |
-|---------|------|----|----|----|----|----|----|
-| VSCode | Code.exe | Undo | Build | Debug | Review | Terminal | Explain |
-| Blender | blender.exe | Bevel | Extrude | Grab | Modifier | Render | Explain |
-| KiCad | kicad.exe | Route | Move | Rotate | DRC | Review | Annotate |
-| Word | WINWORD.EXE | Save | Bold | Undo | Find | Print | AI Write |
-| Chrome | chrome.exe | New Tab | Close | Reopen | Bookmark | DevTools | Find |
-| Default | * | Copy | Paste | Undo | Save | Select | Close |
-
-## 自定义 Profile
-
-### 方式一: GUI 编辑器 (推荐)
-
-运行 GUI 应用后，点击 "管理 Profile" 按钮，可以:
-- 新建 Profile
-- 编辑现有 Profile
-- 删除 Profile
-- 实时预览配置
-
-### 方式二: 手动编辑 JSON
-
-在 `profiles/` 目录下创建 JSON 文件:
+- **GUI 编辑器**: 点击"管理 Profile"按钮
+- **手动编辑**: 在 `profiles/` 目录下创建 JSON 文件
 
 ```json
 {
@@ -148,34 +165,56 @@ python test_profile_editor.py     # 单独测试 Profile 编辑器
 ```
 
 支持的动作类型:
-- `key_combo`: 组合键 (如 `ctrl+z`, `ctrl+shift+b`, `f5`)
-- `command`: 执行命令 (如 `cursor`, `start cmd`)
+- `key_combo`: 组合键 (如 `ctrl+z`, `f5`)
+- `command`: 执行命令 (如 `notepad`)
 - `open_url`: 打开网页
-- `script`: 运行 scripts/ 目录下的脚本
+- `script`: 运行脚本
 
-## BLE 通信协议
+### 内置 Profile
 
-PC → ESP32 JSON 格式:
+| Profile | 应用 | K1 | K2 | K3 | K4 | K5 | K6 |
+|---------|------|----|----|----|----|----|----|
+| VSCode | code.exe | Undo | Build | Debug | Review | Terminal | Explain |
+| Blender | blender.exe | Bevel | Extrude | Grab | Modifier | Render | Explain |
+| KiCad | kicad.exe | Route | Move | Rotate | DRC | Review | Annotate |
+| Word | WINWORD.EXE | Save | Bold | Undo | Find | Print | AI Write |
+| Chrome | chrome.exe | New Tab | Close | Reopen | Bookmark | DevTools | Find |
+| Default | * | Copy | Paste | Undo | Save | Select | Close |
 
-```json
-{
-  "cmd": "profile",
-  "data": {
-    "name": "VSCode",
-    "keys": [
-      {"id": "K1", "display": "Undo", "action": "ctrl+z"},
-      {"id": "K2", "display": "Build", "action": "ctrl+shift+b"}
-    ]
-  }
-}
+## 日志和崩溃处理
+
+### 日志位置
+
+- Windows: `%USERPROFILE%\AppData\Local\AI-Deck-Manager\logs\`
+- 自动轮转，最多 5 个 2MB 文件
+
+### 崩溃报告
+
+- Windows: `%USERPROFILE%\AppData\Local\AI-Deck-Manager\crashes\`
+- 自动捕获未处理异常
+- 包含系统信息、调用栈、日志
+
+## 开发
+
+### 依赖
+
+```
+pywin32>=306        # Windows API
+psutil>=5.9.0       # 进程管理
+pynput>=1.7.6       # 键盘监听
+bleak>=0.21.0       # BLE 通信
+PyQt5>=5.15.0       # GUI 框架
+Pillow>=10.0.0      # 图像处理
+pyserial>=3.5       # 串口通信
+esptool>=4.7.0      # ESP32 烧录
 ```
 
-ESP32 收到后:
-1. 解析 JSON
-2. 更新 `g_current_profile`
-3. 刷新屏幕显示
-4. 按键发送 F13-F18 到 PC
+### 运行测试
 
-## 旧版 GUI
+```bash
+python test_crash_handler.py  # 测试崩溃处理器
+```
 
-旧版 `ai_deck_gui.py` 仍可用，但已被新版 `main.py` 替代。
+## 许可证
+
+MIT License - 详见 [LICENSE](LICENSE)

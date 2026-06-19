@@ -4,10 +4,8 @@ AI Agent Deck Manager - PyInstaller 打包配置
 版本: 2.1.0
 """
 
-import sys
 from pathlib import Path
 
-block_cipher = None
 base_dir = Path(SPECPATH)
 
 a = Analysis(
@@ -19,28 +17,43 @@ a = Analysis(
         (str(base_dir / 'firmware'), 'firmware'),
     ],
     hiddenimports=[
+        # Windows API
         'pywin32',
         'win32gui',
         'win32process',
+        # 进程监控
         'psutil',
+        # 键盘监听
         'pynput',
         'pynput.keyboard',
         'pynput.mouse',
+        # BLE 通信
         'bleak',
         'bleak.backends',
         'bleak.backends.winrt',
+        # PyQt5 GUI
         'PyQt5',
         'PyQt5.QtWidgets',
         'PyQt5.QtCore',
         'PyQt5.QtGui',
         'PyQt5.sip',
+        # 图像处理
         'PIL',
         'PIL.Image',
+        # 串口通信
         'serial',
         'serial.tools',
         'serial.tools.list_ports',
+        # ESP32 烧录
         'esptool',
+        'esptool.cmds',
+        # WiFi 发现
         'zeroconf',
+        # 应用模块
+        'app.core',
+        'app.ui',
+        'app.utils',
+        'app.data',
     ],
     hookspath=[],
     hooksconfig={},
@@ -54,14 +67,16 @@ a = Analysis(
         'cv2',
         'torch',
         'tensorflow',
+        'IPython',
+        'jupyter',
+        'pytest',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,
@@ -79,6 +94,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=None,  # 可替换为 .ico 文件路径
 )
 
 coll = COLLECT(

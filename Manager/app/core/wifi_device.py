@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Optional, Callable
 
-from ..log import get_logger
+from ..utils.logger import get_logger
 
 logger = get_logger("wifi")
 

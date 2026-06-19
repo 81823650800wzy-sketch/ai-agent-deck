@@ -21,10 +21,11 @@ from ..version import get_version_display
 from ..core.engine import Engine, EngineState, EngineConfig, TransportMode
 from ..core.profile import Profile, KeyMapping
 from ..core.wallpaper_manager import WallpaperManager
-from ..log import get_logger, setup_ui_bridge
+from ..utils.logger import get_logger
 from .modern_theme import ModernColors, ModernFonts, apply_modern_style, create_shadow_effect, get_theme_names, set_theme
 from .setup_dialog import SetupDialog
 from .log_panel import LogPanel
+from .about_dialog import AboutDialog
 
 logger = get_logger("ui")
 
@@ -221,8 +222,12 @@ class ModernMainWindow(QMainWindow):
         # 初始加载 Profile 列表
         self._update_profile_list()
 
+        # 更新固件版本信息
+        self._update_firmware_version()
+
         # 初始化系统托盘
         self._tray_icon = None
+        self._tray_engine_action = None
         self._init_system_tray()
 
     def _setup_window(self):
@@ -537,6 +542,25 @@ class ModernMainWindow(QMainWindow):
 
         layout.addWidget(theme_card)
 
+        # 固件烧录卡片
+        flash_card = Card("固件管理")
+
+        flash_btn = GradientButton("烧录固件")
+        flash_btn.setFixedHeight(36)
+        flash_btn.clicked.connect(self._open_flash_dialog)
+        flash_card.add_widget(flash_btn)
+
+        # 固件版本信息
+        self.firmware_version_label = QLabel("固件版本: 未知")
+        self.firmware_version_label.setStyleSheet(f"""
+            color: {ModernColors.TEXT_TERTIARY};
+            font-size: 10px;
+            padding: 4px 0;
+        """)
+        flash_card.add_widget(self.firmware_version_label)
+
+        layout.addWidget(flash_card)
+
         layout.addStretch()
 
         return panel
@@ -713,6 +737,27 @@ class ModernMainWindow(QMainWindow):
 
             self._log(f"[设置] 已选择: {mode}")
 
+    def _open_flash_dialog(self):
+        """打开固件烧录管理器对话框"""
+        from ..core.flash_manager import FlashManager
+        flash_manager = FlashManager()
+        dialog = FlashDialog(flash_manager, self)
+        dialog.exec_()
+
+    def _update_firmware_version(self):
+        """更新固件版本信息"""
+        try:
+            from ..core.flash_manager import FlashManager
+            flash_manager = FlashManager()
+            version = flash_manager.get_firmware_version()
+            if version:
+                self.firmware_version_label.setText(f"固件版本: {version}")
+            else:
+                self.firmware_version_label.setText("固件版本: 未知")
+        except Exception as e:
+            logger.debug("获取固件版本失败: %s", e)
+            self.firmware_version_label.setText("固件版本: 未知")
+
     def _quick_scan(self):
         """快速扫描 BLE 设备"""
         self._log("[扫描] 正在扫描 BLE 设备...")
@@ -775,6 +820,8 @@ class ModernMainWindow(QMainWindow):
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.status_indicator.set_status("connecting", "连接中...")
+        if self._tray_engine_action:
+            self._tray_engine_action.setText("停止引擎")
         self._log(f"[OK] 引擎启动中... 模式: {mode_text}")
 
         # 后台启动引擎
@@ -797,6 +844,9 @@ class ModernMainWindow(QMainWindow):
             self.start_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
             self.status_indicator.set_status("offline", "设备未连接")
+            if self._tray_engine_action:
+                self._tray_engine_action.setText("启动引擎")
+            self._update_tray_tooltip()
             self._log("[OK] 引擎已停止")
         except Exception as e:
             self._log(f"[ERROR] 停止失败: {e}")
@@ -1005,11 +1055,17 @@ class ModernMainWindow(QMainWindow):
     def _on_device_connect(self):
         """设备连接（主线程）"""
         self.status_indicator.set_status("online", "设备已连接")
+        if self._tray_engine_action:
+            self._tray_engine_action.setText("停止引擎")
+        self._update_tray_tooltip()
         self._log("[OK] 设备已连接")
 
     def _on_device_disconnect(self):
         """设备断开（主线程）"""
         self.status_indicator.set_status("offline", "设备已断开")
+        if self._tray_engine_action:
+            self._tray_engine_action.setText("启动引擎")
+        self._update_tray_tooltip()
         self._log("[WARN] 设备已断开")
 
     def _on_app_change_safe(self, new_name: str, old_name: str):
@@ -1088,6 +1144,12 @@ class ModernMainWindow(QMainWindow):
                 self.status_indicator.set_status("online", "设备已连接")
             else:
                 self.status_indicator.set_status("connecting", "连接中...")
+            if self._tray_engine_action:
+                self._tray_engine_action.setText("停止引擎")
+        else:
+            if self._tray_engine_action:
+                self._tray_engine_action.setText("启动引擎")
+        self._update_tray_tooltip()
 
     def _log(self, message: str, level: str = "INFO", tag: str = "", detail: str = ""):
         """添加日志（可从任意线程调用）"""
@@ -1155,36 +1217,46 @@ class ModernMainWindow(QMainWindow):
     def _init_system_tray(self):
         """初始化系统托盘图标"""
         self._tray_icon = None
+        self._tray_engine_action = None
         try:
             from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction
-            from PyQt5.QtGui import QIcon
 
             if not QSystemTrayIcon.isSystemTrayAvailable():
                 return
 
-            # 创建托盘图标
             tray_icon = self._create_tray_icon()
             self._tray_icon = QSystemTrayIcon(tray_icon, self)
+            self._tray_icon.setToolTip("AI Agent Deck")
 
-            # 托盘菜单
+            # ── 托盘右键菜单 ──
             tray_menu = QMenu()
 
+            # 显示主窗口
             show_action = QAction("显示主窗口", self)
             show_action.triggered.connect(self._show_from_tray)
             tray_menu.addAction(show_action)
 
             tray_menu.addSeparator()
 
+            # 启动 / 停止引擎（动态文字）
+            self._tray_engine_action = QAction("启动引擎", self)
+            self._tray_engine_action.triggered.connect(
+                self._toggle_engine_from_tray)
+            tray_menu.addAction(self._tray_engine_action)
+
+            # 烧录固件
             flash_action = QAction("烧录固件...", self)
             flash_action.triggered.connect(self._on_flash_firmware)
             tray_menu.addAction(flash_action)
 
             tray_menu.addSeparator()
 
+            # 关于
             about_action = QAction("关于", self)
             about_action.triggered.connect(self._show_about)
             tray_menu.addAction(about_action)
 
+            # 退出
             quit_action = QAction("退出", self)
             quit_action.triggered.connect(self._force_quit)
             tray_menu.addAction(quit_action)
@@ -1235,27 +1307,27 @@ class ModernMainWindow(QMainWindow):
         from PyQt5.QtWidgets import QApplication
         QApplication.quit()
 
+    def _toggle_engine_from_tray(self):
+        """从托盘切换引擎状态"""
+        if self.engine.is_running():
+            self._on_stop()
+        else:
+            self._on_start()
+
+    def _update_tray_tooltip(self):
+        """更新托盘图标提示文字"""
+        if self._tray_icon:
+            if self.engine.is_connected():
+                self._tray_icon.setToolTip("AI Agent Deck - 设备已连接")
+            elif self.engine.is_running():
+                self._tray_icon.setToolTip("AI Agent Deck - 连接中...")
+            else:
+                self._tray_icon.setToolTip("AI Agent Deck")
+
     def _show_about(self):
         """显示关于对话框"""
-        from ..version import get_version_info, get_version_display
-        from PyQt5.QtWidgets import QMessageBox
-
-        info = get_version_info()
-        QMessageBox.about(
-            self,
-            "关于 AI Agent Deck",
-            f"<h2>{info['app_name']}</h2>"
-            f"<p>版本: {get_version_display()}</p>"
-            f"<p>固件版本: v{info.get('firmware_version', 'N/A')} ({info.get('firmware_build', '')})</p>"
-            f"<br>"
-            f"<p>{info['description']}</p>"
-            f"<br>"
-            f"<p>基于 ESP32-S3 的上下文感知工作流控制器</p>"
-            f"<p>自动检测当前应用，智能切换按键映射</p>"
-            f"<br>"
-            f"<p><a href='https://github.com/81823650800wzy-sketch/ai-agent-deck'>"
-            f"GitHub 仓库</a></p>"
-        )
+        dlg = AboutDialog(self)
+        dlg.exec_()
 
     def _on_flash_firmware(self):
         """打开固件烧录对话框"""

@@ -8,7 +8,7 @@ import threading
 from typing import Optional, Callable
 from dataclasses import dataclass
 
-from ..log import get_logger
+from ..utils.logger import get_logger
 from .device import DeviceManager, DeviceManagerBLE, DeviceManagerSerial
 from .profile import ProfileManager, Profile
 

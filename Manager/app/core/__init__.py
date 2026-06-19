@@ -7,5 +7,6 @@ from .device import DeviceManager
 from .wifi_device import WiFiDeviceManager
 from .profile import ProfileManager
 from .workflow import WorkflowManager
+from .flash_manager import FlashManager
 
-__all__ = ['Engine', 'TransportMode', 'DeviceManager', 'WiFiDeviceManager', 'ProfileManager', 'WorkflowManager']
+__all__ = ['Engine', 'TransportMode', 'DeviceManager', 'WiFiDeviceManager', 'ProfileManager', 'WorkflowManager', 'FlashManager']

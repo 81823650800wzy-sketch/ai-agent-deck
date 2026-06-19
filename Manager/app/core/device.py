@@ -11,7 +11,7 @@ from typing import Optional, Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-from ..log import get_logger
+from ..utils.logger import get_logger
 
 logger = get_logger("device")
 
