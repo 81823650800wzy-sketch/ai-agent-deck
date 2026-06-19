@@ -9,6 +9,10 @@ import threading
 import time
 from typing import Optional, Callable
 
+from ..log import get_logger
+
+logger = get_logger("wifi")
+
 
 class WiFiDeviceManager:
     """
@@ -51,7 +55,7 @@ class WiFiDeviceManager:
 
     def _emit_status(self, msg: str):
         """发送状态消息"""
-        print(f"[WiFi] {msg}")
+        logger.info(msg)
         if self._on_status_callback:
             self._on_status_callback(msg)
 
@@ -104,7 +108,7 @@ class WiFiDeviceManager:
         """DNS 回退"""
         try:
             ip = socket.gethostbyname(hostname)
-            print(f"[WiFi] DNS resolved: {hostname} -> {ip}")
+            logger.info(f"DNS 解析: {hostname} -> {ip}")
             self.host = ip
             return ip
         except socket.gaierror:
@@ -167,7 +171,7 @@ class WiFiDeviceManager:
             try:
                 data = self._socket.recv(4096)
                 if not data:
-                    print("[WiFi] Connection closed by remote")
+                    logger.warning("远端关闭连接")
                     break
 
                 buf += data
@@ -210,7 +214,7 @@ class WiFiDeviceManager:
             self._socket.sendall(json_str.encode("utf-8"))
             return True
         except Exception as e:
-            print(f"[WiFi] Send error: {e}")
+            logger.error(f"WiFi 发送异常: {e}")
             self.connected = False
             return False
 
@@ -236,7 +240,7 @@ class WiFiDeviceManager:
             self._socket.sendall(data)
             return True
         except Exception as e:
-            print(f"[WiFi] Send raw error: {e}")
+            logger.error(f"WiFi 发送原始数据异常: {e}")
             self.connected = False
             return False
 
@@ -277,7 +281,7 @@ class WiFiDeviceManager:
 
         # 1. 开始 OTA
         if not self.send({"cmd": "ota_begin", "size": total}):
-            print("[OTA] Failed to start")
+            logger.error("OTA 启动失败")
             return False
 
         time.sleep(0.5)  # 等待 ESP32 准备
@@ -290,7 +294,7 @@ class WiFiDeviceManager:
             b64_chunk = base64.b64encode(chunk).decode("ascii")
 
             if not self.send({"cmd": "ota_data", "data": b64_chunk}):
-                print(f"[OTA] Failed at offset {offset}")
+                logger.error(f"OTA 传输失败: offset={offset}")
                 return False
 
             offset = end
@@ -302,8 +306,8 @@ class WiFiDeviceManager:
         # 3. 完成
         time.sleep(0.5)
         if not self.send({"cmd": "ota_end"}):
-            print("[OTA] Failed to finalize")
+            logger.error("OTA 完成命令发送失败")
             return False
 
-        print("[OTA] Update sent, device will reboot")
+        logger.info("OTA 更新已发送，设备将重启")
         return True

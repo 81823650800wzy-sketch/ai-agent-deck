@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Optional, List, Dict
 from dataclasses import dataclass, field
 
+from ..log import get_logger
+
+logger = get_logger("profile")
+
 
 @dataclass
 class KeyMapping:
@@ -60,7 +64,7 @@ class ProfileManager:
                 if profile:
                     self.profiles[profile.name] = profile
             except Exception as e:
-                print(f"[ProfileManager] Load error {file}: {e}")
+                logger.error(f"加载 Profile 失败 {file}: {e}")
 
     def _load_profile(self, file: Path) -> Optional[Profile]:
         """加载单个 Profile"""
@@ -215,5 +219,5 @@ class ProfileManager:
                 self.save_profile(profile)
             return profile
         except Exception as e:
-            print(f"[ProfileManager] Import error: {e}")
+            logger.error(f"导入 Profile 异常: {e}")
             return None

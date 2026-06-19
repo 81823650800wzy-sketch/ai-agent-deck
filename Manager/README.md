@@ -46,25 +46,40 @@ Context-Aware Workflow Controller — 桌面端管理软件
 
 ```
 Manager/
-├── main.py               # 入口
-├── workflow_manager.py   # 工作流协调器
-├── window_detector.py    # 活动窗口检测
-├── profile_manager.py    # Profile 管理
-├── device_manager.py     # BLE 设备通信
-├── test_workflow.py      # 端到端测试
-├── profiles/             # Profile 配置文件 (自动生成)
-│   ├── vscode.json
-│   ├── blender.json
-│   └── ...
-├── gui/                  # GUI 模块
+├── app/                  # 应用主模块
 │   ├── __init__.py
-│   ├── app.py            # 完整 GUI 应用
-│   ├── main_window.py    # 主窗口
-│   └── profile_editor.py # Profile 编辑器
-├── scripts/              # 自定义脚本
+│   ├── main.py           # 应用入口
+│   ├── core/             # 核心引擎
+│   ├── ui/               # UI 模块
+│   ├── ai/               # AI 模块
+│   └── utils/            # 工具模块
+│       ├── crash_handler.py  # 崩溃处理器
+│       ├── logger.py         # 日志系统
+│       └── version.py        # 版本信息
+├── profiles/             # Profile 配置文件
+├── test_crash_handler.py # 崩溃处理器测试
+├── CRASH_HANDLER.md      # 崩溃处理器文档
 ├── requirements.txt      # Python 依赖
-└── ai_deck_gui.py        # 旧版 GUI (保留)
+└── start.bat             # 启动脚本
 ```
+
+## 崩溃处理
+
+应用内置全局异常捕获和崩溃报告系统：
+
+- 自动捕获主线程和子线程异常
+- 生成详细的崩溃报告（系统信息、调用栈、日志）
+- 显示用户友好的错误对话框
+
+崩溃报告位置：
+- Windows: `%USERPROFILE%\AppData\Local\AI-Deck-Manager\crashes\`
+
+测试崩溃处理器：
+```bash
+python test_crash_handler.py
+```
+
+详见 [CRASH_HANDLER.md](CRASH_HANDLER.md)
 
 ## 快速开始
 

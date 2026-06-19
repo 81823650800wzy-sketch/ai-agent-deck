@@ -8,8 +8,11 @@ import threading
 from typing import Optional, Callable
 from dataclasses import dataclass
 
+from ..log import get_logger
 from .device import DeviceManager, DeviceManagerBLE, DeviceManagerSerial
 from .profile import ProfileManager, Profile
+
+logger = get_logger("workflow")
 
 
 @dataclass
@@ -64,7 +67,7 @@ class WindowDetector:
             import win32process
             import psutil
         except ImportError:
-            print("[WindowDetector] Missing dependencies: pywin32, psutil")
+            logger.error("缺少依赖: pywin32, psutil")
             return
 
         while self._running:

@@ -1,4 +1,7 @@
 # AI Agent Deck Manager - 依赖
+# Python >= 3.9
+
+# 核心依赖
 pywin32>=306
 psutil>=5.9.0
 pynput>=1.7.6
@@ -6,3 +9,9 @@ bleak>=0.21.0
 PyQt5>=5.15.0
 Pillow>=10.0.0
 pyserial>=3.5
+
+# ESP32 固件烧录
+esptool>=4.7.0
+
+# 可选依赖（WiFi 发现）
+zeroconf>=0.100.0

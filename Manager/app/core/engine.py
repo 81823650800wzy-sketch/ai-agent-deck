@@ -9,10 +9,13 @@ from typing import Optional, Callable, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 
+from ..log import get_logger
 from .device import DeviceManager, DeviceManagerSerial
 from .wifi_device import WiFiDeviceManager
 from .profile import ProfileManager, Profile
 from .workflow import WorkflowManager
+
+logger = get_logger("engine")
 
 
 class EngineState(Enum):
@@ -67,7 +70,7 @@ class Engine:
         try:
             self.profiles = ProfileManager()
         except Exception as e:
-            print(f"[Engine] Pre-load profiles failed: {e}")
+            logger.error(f"预加载 Profile 失败: {e}")
 
         # 待发送的 Profile（设备连接后自动发送）
         self._pending_profile: Optional[Profile] = None
@@ -105,9 +108,9 @@ class Engine:
                 # Qt 对象已删除，忽略
                 if "deleted" in str(e).lower():
                     continue
-                print(f"[Engine] Callback error: {e}")
+                logger.warning(f"回调异常: {e}")
             except Exception as e:
-                print(f"[Engine] Callback error: {e}")
+                logger.warning(f"回调异常: {e}")
 
     def start(self):
         """启动引擎"""
@@ -215,10 +218,10 @@ class Engine:
                 if self._pending_profile and self.workflow.device.is_connected():
                     success = self.workflow.device.send_profile(self._pending_profile)
                     if success:
-                        print(f"[Engine] Pending profile sent: {self._pending_profile.name}")
+                        logger.info(f"待发送 Profile 已送达: {self._pending_profile.name}")
                         self._pending_profile = None
                     else:
-                        print(f"[Engine] Failed to send pending profile")
+                        logger.error("待发送 Profile 送达失败")
 
             threading.Thread(target=_delayed_send, daemon=True).start()
 
@@ -239,18 +242,18 @@ class Engine:
             if self.workflow and self.workflow.device:
                 if not self.workflow.device.is_connected():
                     self._pending_profile = profile
-                    print(f"[Engine] Device not connected, will send when ready: {profile.name}")
+                    logger.info(f"设备未连接，等待就绪后发送: {profile.name}")
                     return
 
                 success = self.workflow.device.send_profile(profile)
                 if success:
-                    print(f"[Engine] Profile sent: {profile.name}")
+                    logger.info(f"Profile 已发送: {profile.name}")
                     self._pending_profile = None
                     if self.workflow:
                         self.workflow.current_profile = profile
                 else:
                     self._pending_profile = profile
-                    print(f"[Engine] Failed to send profile: {profile.name}")
+                    logger.error(f"Profile 发送失败: {profile.name}")
                     self._emit('error', f"发送 Profile 失败: {profile.name}")
 
     def send_profile(self, profile: Profile) -> bool:

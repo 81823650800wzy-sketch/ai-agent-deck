@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 AI Agent Deck Manager - PyInstaller 打包配置
+版本: 2.1.0
 """
 
 import sys
@@ -15,6 +16,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(base_dir / 'profiles'), 'profiles'),
+        (str(base_dir / 'firmware'), 'firmware'),
     ],
     hiddenimports=[
         'pywin32',
@@ -22,13 +24,23 @@ a = Analysis(
         'win32process',
         'psutil',
         'pynput',
+        'pynput.keyboard',
+        'pynput.mouse',
         'bleak',
+        'bleak.backends',
+        'bleak.backends.winrt',
         'PyQt5',
         'PyQt5.QtWidgets',
         'PyQt5.QtCore',
         'PyQt5.QtGui',
+        'PyQt5.sip',
         'PIL',
+        'PIL.Image',
         'serial',
+        'serial.tools',
+        'serial.tools.list_ports',
+        'esptool',
+        'zeroconf',
     ],
     hookspath=[],
     hooksconfig={},
@@ -39,6 +51,9 @@ a = Analysis(
         'numpy',
         'scipy',
         'pandas',
+        'cv2',
+        'torch',
+        'tensorflow',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -60,6 +75,10 @@ exe = EXE(
     upx=True,
     console=False,
     disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
 )
 
 coll = COLLECT(

@@ -17,12 +17,16 @@ from PyQt5.QtGui import QFont, QColor, QIcon, QPixmap, QPainter, QBrush, QPen
 from typing import Optional
 import time
 
+from ..version import get_version_display
 from ..core.engine import Engine, EngineState, EngineConfig, TransportMode
 from ..core.profile import Profile, KeyMapping
 from ..core.wallpaper_manager import WallpaperManager
+from ..log import get_logger, setup_ui_bridge
 from .modern_theme import ModernColors, ModernFonts, apply_modern_style, create_shadow_effect, get_theme_names, set_theme
 from .setup_dialog import SetupDialog
 from .log_panel import LogPanel
+
+logger = get_logger("ui")
 
 
 class ScreenPreview(QWidget):
@@ -216,6 +220,10 @@ class ModernMainWindow(QMainWindow):
 
         # 初始加载 Profile 列表
         self._update_profile_list()
+
+        # 初始化系统托盘
+        self._tray_icon = None
+        self._init_system_tray()
 
     def _setup_window(self):
         """设置窗口属性"""
@@ -638,6 +646,8 @@ class ModernMainWindow(QMainWindow):
     def _create_log_area(self) -> QWidget:
         """创建下半区：增强日志面板"""
         self.log_panel = LogPanel()
+        # 将 LogPanel 桥接到 Python 日志系统
+        setup_ui_bridge(self.log_panel)
         return self.log_panel
 
     def _setup_status_bar(self):
@@ -650,7 +660,7 @@ class ModernMainWindow(QMainWindow):
         self.status_bar.addWidget(self.status_label)
 
         # 版本信息
-        version_label = QLabel("v2.0.0")
+        version_label = QLabel(get_version_display())
         version_label.setStyleSheet(f"color: {ModernColors.TEXT_TERTIARY};")
         self.status_bar.addPermanentWidget(version_label)
 
@@ -1116,13 +1126,199 @@ class ModernMainWindow(QMainWindow):
         self._process_log(message)
 
     def closeEvent(self, event):
-        """关闭事件"""
+        """关闭事件 - 最小化到托盘"""
+        if self._tray_icon and self._tray_icon.isVisible():
+            self.hide()
+            self._tray_icon.showMessage(
+                "AI Agent Deck",
+                "程序已最小化到系统托盘",
+                QSystemTrayIcon.Information,
+                2000
+            )
+            event.ignore()
+        else:
+            self._cleanup_and_exit()
+            event.accept()
+
+    def _cleanup_and_exit(self):
+        """清理并退出"""
         try:
+            if self._tray_icon:
+                self._tray_icon.hide()
             if self.engine.is_running():
                 self.engine.stop()
-            # 等待后台线程结束
             import time
-            time.sleep(0.5)
-        except:
+            time.sleep(0.3)
+        except Exception:
             pass
-        event.accept()
+
+    def _init_system_tray(self):
+        """初始化系统托盘图标"""
+        self._tray_icon = None
+        try:
+            from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction
+            from PyQt5.QtGui import QIcon
+
+            if not QSystemTrayIcon.isSystemTrayAvailable():
+                return
+
+            # 创建托盘图标
+            tray_icon = self._create_tray_icon()
+            self._tray_icon = QSystemTrayIcon(tray_icon, self)
+
+            # 托盘菜单
+            tray_menu = QMenu()
+
+            show_action = QAction("显示主窗口", self)
+            show_action.triggered.connect(self._show_from_tray)
+            tray_menu.addAction(show_action)
+
+            tray_menu.addSeparator()
+
+            flash_action = QAction("烧录固件...", self)
+            flash_action.triggered.connect(self._on_flash_firmware)
+            tray_menu.addAction(flash_action)
+
+            tray_menu.addSeparator()
+
+            about_action = QAction("关于", self)
+            about_action.triggered.connect(self._show_about)
+            tray_menu.addAction(about_action)
+
+            quit_action = QAction("退出", self)
+            quit_action.triggered.connect(self._force_quit)
+            tray_menu.addAction(quit_action)
+
+            self._tray_icon.setContextMenu(tray_menu)
+            self._tray_icon.activated.connect(self._on_tray_activated)
+            self._tray_icon.show()
+
+        except Exception as e:
+            self._log(f"[WARN] 系统托盘初始化失败: {e}")
+
+    def _create_tray_icon(self):
+        """创建托盘图标"""
+        from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
+        from PyQt5.QtCore import Qt
+
+        pixmap = QPixmap(64, 64)
+        pixmap.fill(QColor("#1a1a2e"))
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor("#0f3460"))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(4, 4, 56, 56, 12, 12)
+
+        from PyQt5.QtGui import QFont
+        painter.setPen(QColor("#e94560"))
+        painter.setFont(QFont("Segoe UI", 20, QFont.Bold))
+        painter.drawText(4, 4, 56, 56, Qt.AlignCenter, "AD")
+        painter.end()
+
+        return QIcon(pixmap)
+
+    def _on_tray_activated(self, reason):
+        """托盘图标激活"""
+        if reason == QSystemTrayIcon.DoubleClick:
+            self._show_from_tray()
+
+    def _show_from_tray(self):
+        """从托盘恢复显示"""
+        self.showNormal()
+        self.activateWindow()
+        self.raise_()
+
+    def _force_quit(self):
+        """强制退出"""
+        self._cleanup_and_exit()
+        from PyQt5.QtWidgets import QApplication
+        QApplication.quit()
+
+    def _show_about(self):
+        """显示关于对话框"""
+        from ..version import get_version_info, get_version_display
+        from PyQt5.QtWidgets import QMessageBox
+
+        info = get_version_info()
+        QMessageBox.about(
+            self,
+            "关于 AI Agent Deck",
+            f"<h2>{info['app_name']}</h2>"
+            f"<p>版本: {get_version_display()}</p>"
+            f"<p>固件版本: v{info.get('firmware_version', 'N/A')} ({info.get('firmware_build', '')})</p>"
+            f"<br>"
+            f"<p>{info['description']}</p>"
+            f"<br>"
+            f"<p>基于 ESP32-S3 的上下文感知工作流控制器</p>"
+            f"<p>自动检测当前应用，智能切换按键映射</p>"
+            f"<br>"
+            f"<p><a href='https://github.com/81823650800wzy-sketch/ai-agent-deck'>"
+            f"GitHub 仓库</a></p>"
+        )
+
+    def _on_flash_firmware(self):
+        """打开固件烧录对话框"""
+        try:
+            from ..core.flash_manager import FlashManager
+            flash_mgr = FlashManager()
+
+            fw_path = flash_mgr.get_firmware_path()
+            if not fw_path:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "烧录固件", "未找到固件文件。\n请先编译固件或运行 build.bat 打包。")
+                return
+
+            # 检测串口
+            import serial.tools.list_ports
+            ports = serial.tools.list_ports.comports()
+            esp_ports = [p for p in ports if 'CP210' in p.description or 'CH340' in p.description or 'USB' in p.description]
+
+            if not esp_ports:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "烧录固件", "未检测到 ESP32 设备。\n请检查 USB 连接。")
+                return
+
+            # 选择串口
+            from PyQt5.QtWidgets import QInputDialog
+            port_names = [f"{p.device} ({p.description})" for p in esp_ports]
+            port_str, ok = QInputDialog.getItem(self, "选择串口", "ESP32 串口:", port_names, 0, False)
+
+            if not ok:
+                return
+
+            port = port_str.split(" ")[0]
+
+            # 确认烧录
+            from PyQt5.QtWidgets import QMessageBox
+            ret = QMessageBox.question(
+                self, "确认烧录",
+                f"即将烧录固件到 {port}\n\n"
+                f"固件: {fw_path.name}\n"
+                f"大小: {fw_path.stat().st_size / 1024:.1f} KB\n\n"
+                f"烧录过程中请勿断开连接。继续？",
+                QMessageBox.Yes | QMessageBox.No
+            )
+
+            if ret != QMessageBox.Yes:
+                return
+
+            # 执行烧录（后台线程）
+            def do_flash():
+                def on_progress(p):
+                    self.status_signal.emit(f"[烧录] {p.message}")
+                    if p.error:
+                        self.log_signal.emit("ERROR", f"[烧录] {p.error}")
+
+                flash_mgr.set_progress_callback(on_progress)
+                success = flash_mgr.flash_serial(port, fw_path)
+                if success:
+                    self.status_signal.emit("固件烧录完成")
+                else:
+                    self.status_signal.emit("固件烧录失败")
+
+            import threading
+            threading.Thread(target=do_flash, daemon=True).start()
+
+        except Exception as e:
+            self._log(f"[ERROR] 固件烧录失败: {e}")

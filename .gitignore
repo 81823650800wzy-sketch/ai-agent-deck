@@ -19,6 +19,10 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Logs
+logs/
+*.log
+
 # Android
 AndroidApp/app/build/
 AndroidApp/.gradle/

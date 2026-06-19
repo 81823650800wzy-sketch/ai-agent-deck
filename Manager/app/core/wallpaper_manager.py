@@ -12,6 +12,10 @@ import threading
 from pathlib import Path
 from typing import Optional, Callable
 
+from ..log import get_logger
+
+logger = get_logger("wallpaper")
+
 try:
     from PIL import Image
 except ImportError:
@@ -75,7 +79,7 @@ class WallpaperManager:
 
     def _log(self, msg: str):
         self._upload_log.append(msg)
-        print(msg)
+        logger.info(msg)
 
     def load_image(self, file_path: str) -> Optional[Image.Image]:
         """加载并预处理图片"""

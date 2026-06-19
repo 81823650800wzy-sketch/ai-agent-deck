@@ -2,8 +2,12 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 
+:: 读取版本号
+for /f "tokens=*" %%i in ('python -c "from app.version import get_version_display; print(get_version_display())" 2^>nul') do set VERSION=%%i
+if "%VERSION%"=="" set VERSION=v2.0.0
+
 echo ================================
-echo  AI Agent Deck Manager 启动
+echo  AI Agent Deck Manager %VERSION%
 echo ================================
 echo.
 

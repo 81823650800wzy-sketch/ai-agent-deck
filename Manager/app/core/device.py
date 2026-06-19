@@ -11,6 +11,10 @@ from typing import Optional, Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
+from ..log import get_logger
+
+logger = get_logger("device")
+
 
 @dataclass
 class DeviceInfo:
@@ -115,7 +119,7 @@ class DeviceManagerBLE(DeviceManager):
         try:
             self._loop.run_until_complete(self._main_loop())
         except Exception as e:
-            print(f"[BLE] Event loop error: {e}")
+            logger.error(f"BLE 事件循环异常: {e}")
         finally:
             self._loop.close()
 
@@ -141,7 +145,7 @@ class DeviceManagerBLE(DeviceManager):
                 await self._wait_for_disconnect()
 
             except Exception as e:
-                print(f"[BLE] Main loop error: {e}")
+                logger.error(f"BLE 主循环异常: {e}")
 
             # 清理
             if self._heartbeat_task:
@@ -168,7 +172,7 @@ class DeviceManagerBLE(DeviceManager):
             return None
 
         except Exception as e:
-            print(f"[BLE] Scan error: {e}")
+            logger.error(f"BLE 扫描异常: {e}")
             return None
 
     async def _connect_device(self, device: DeviceInfo):
@@ -191,9 +195,9 @@ class DeviceManagerBLE(DeviceManager):
                 # 列出可用服务（调试）
                 if hasattr(self._client, 'services'):
                     for svc in self._client.services:
-                        print(f"[BLE] Service: {svc.uuid}")
+                        logger.debug(f"BLE Service: {svc.uuid}")
                         for char in svc.characteristics:
-                            print(f"  Char: {char.uuid} props={char.properties}")
+                            logger.debug(f"  Char: {char.uuid} props={char.properties}")
 
                 if self._on_connect_callback:
                     self._on_connect_callback()
@@ -203,7 +207,7 @@ class DeviceManagerBLE(DeviceManager):
             return False
 
         except Exception as e:
-            print(f"[BLE] Connect error: {e}")
+            logger.error(f"BLE 连接异常: {e}")
             return False
 
     def _on_ble_disconnect(self, client):
@@ -233,7 +237,7 @@ class DeviceManagerBLE(DeviceManager):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[BLE] Heartbeat error: {e}")
+                logger.warning(f"BLE 心跳异常: {e}")
                 break
 
     async def _send_ping(self):
@@ -245,12 +249,12 @@ class DeviceManagerBLE(DeviceManager):
 
     async def _send_data(self, data: bytes, retries: int = 3):
         if not self._client or not self.connected:
-            print(f"[BLE] Cannot send: client={self._client is not None}, connected={self.connected}")
+            logger.warning(f"BLE 无法发送: client={self._client is not None}, connected={self.connected}")
             return False
 
         # 检查实际连接状态
         if hasattr(self._client, 'is_connected') and not self._client.is_connected:
-            print("[BLE] Client disconnected, marking as not connected")
+            logger.warning("BLE 客户端已断开")
             self.connected = False
             return False
 
@@ -263,7 +267,7 @@ class DeviceManagerBLE(DeviceManager):
                 return True
 
             except Exception as e:
-                print(f"[BLE] Send attempt {attempt+1}/{retries} failed: {type(e).__name__}: {e}")
+                logger.warning(f"BLE 发送尝试 {attempt+1}/{retries} 失败: {type(e).__name__}: {e}")
                 # 如果是连接错误，标记为断开
                 if "disconnected" in str(e).lower() or "not connected" in str(e).lower():
                     self.connected = False
@@ -276,7 +280,7 @@ class DeviceManagerBLE(DeviceManager):
 
     def send_profile(self, profile) -> bool:
         if not self.connected or not self._loop:
-            print(f"[BLE] Cannot send profile: connected={self.connected}, loop={self._loop is not None}")
+            logger.warning(f"BLE 无法发送 Profile: connected={self.connected}, loop={self._loop is not None}")
             return False
 
         try:
@@ -299,7 +303,7 @@ class DeviceManagerBLE(DeviceManager):
             return future.result(timeout=15.0)  # 增加超时以适应重试
 
         except Exception as e:
-            print(f"[BLE] Send profile error: {e}")
+            logger.error(f"BLE 发送 Profile 异常: {e}")
             return False
 
     def send_profile_raw(self, json_str: str) -> bool:
@@ -313,7 +317,7 @@ class DeviceManagerBLE(DeviceManager):
             )
             return future.result(timeout=15.0)  # 增加超时以适应重试
         except Exception as e:
-            print(f"[BLE] Send raw error: {e}")
+            logger.error(f"BLE 发送原始数据异常: {e}")
             return False
 
     def stop(self):
@@ -433,14 +437,14 @@ class DeviceManagerSerial(DeviceManager):
                 if self._on_connect_callback:
                     self._on_connect_callback()
 
-                print(f"[Serial] Connected to {self.port}")
+                logger.info(f"串口已连接: {self.port}")
 
                 # 发送 ping 测试连接
                 self._serial.write(b'{"cmd":"ping"}\n')
                 self._serial.flush()
 
             except Exception as e:
-                print(f"[Serial] Connect error: {e}")
+                logger.error(f"串口连接异常: {e}")
 
     def _recv_loop(self):
         """后台接收线程 - 读取 ESP32 的所有输出"""
@@ -448,7 +452,7 @@ class DeviceManagerSerial(DeviceManager):
         while self._running and self.connected:
             try:
                 if not self._serial or not self._serial.is_open:
-                    print("[Serial] Port closed, exiting recv loop")
+                    logger.warning("串口已关闭，退出接收循环")
                     self.connected = False
                     break
 
@@ -459,7 +463,7 @@ class DeviceManagerSerial(DeviceManager):
                         line, buf = buf.split(b"\n", 1)
                         line_str = line.decode("utf-8", errors="replace").strip()
                         if line_str:
-                            print(f"[Serial] RX: {line_str}")
+                            logger.debug(f"串口 RX: {line_str}")
                             if self._on_data_callback:
                                 try:
                                     msg = json.loads(line_str)
@@ -471,18 +475,18 @@ class DeviceManagerSerial(DeviceManager):
 
             except Exception as e:
                 if self._running:
-                    print(f"[Serial] Recv error: {e}")
+                    logger.error(f"串口接收异常: {e}")
                     self.connected = False
                 break
 
         # 通知断开
         if self._on_disconnect_callback:
             self._on_disconnect_callback()
-        print("[Serial] Recv thread exited")
+        logger.debug("串口接收线程已退出")
 
     def send_profile(self, profile) -> bool:
         if not self.connected or not self._serial:
-            print(f"[Serial] Cannot send: connected={self.connected}, serial={self._serial is not None}")
+            logger.warning(f"串口无法发送: connected={self.connected}, serial={self._serial is not None}")
             return False
 
         try:
@@ -499,13 +503,13 @@ class DeviceManagerSerial(DeviceManager):
             json_str = json.dumps(payload, ensure_ascii=False)
             data = json_str.encode("utf-8") + b"\n"
 
-            print(f"[Serial] TX: {json_str[:100]}...")
+            logger.debug(f"串口 TX: {json_str[:100]}...")
             self._serial.write(data)
             self._serial.flush()
             return True
 
         except Exception as e:
-            print(f"[Serial] Send error: {e}")
+            logger.error(f"串口发送异常: {e}")
             return False
 
     def send_profile_raw(self, json_str: str) -> bool:
@@ -514,12 +518,12 @@ class DeviceManagerSerial(DeviceManager):
             return False
         try:
             data = json_str.encode("utf-8") + b"\n"
-            print(f"[Serial] TX raw: {json_str[:100]}...")
+            logger.debug(f"串口 TX raw: {json_str[:100]}...")
             self._serial.write(data)
             self._serial.flush()
             return True
         except Exception as e:
-            print(f"[Serial] Send raw error: {e}")
+            logger.error(f"串口发送原始数据异常: {e}")
             return False
 
     def stop(self):

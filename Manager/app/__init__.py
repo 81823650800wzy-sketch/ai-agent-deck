@@ -1,6 +1,8 @@
 """
 AI Agent Deck - 专业桌面应用程序
+Context-Aware Workflow Controller for ESP32
 """
 
-__version__ = "2.0.0"
-__author__ = "AI Agent Deck Team"
+from .utils.version import __version__, APP_NAME, APP_AUTHOR
+
+__author__ = APP_AUTHOR
