@@ -48,7 +48,16 @@ typedef struct {
     bool playing;               /* 是否正在播放 */
 } wallpaper_t;
 
+/* ── ACK 回调类型 ─────────────────────────── */
+typedef void (*wp_ack_callback_t)(const char *data, int len);
+
 /* ── API ──────────────────────────────────── */
+
+/**
+ * 设置 ACK 响应回调（串口/WiFi/BLE 各自设置）
+ * 未设置时默认使用 printf (串口)
+ */
+void wallpaper_set_ack_callback(wp_ack_callback_t cb);
 
 /**
  * 初始化壁纸系统
@@ -107,6 +116,7 @@ void wallpaper_draw(void);
 
 /**
  * 从串口命令加载壁纸
+ * ACK 通过 wallpaper_set_ack_callback 设置的回调发送
  * @param json_str  JSON 命令字符串
  */
 void wallpaper_parse_cmd(const char *json_str);

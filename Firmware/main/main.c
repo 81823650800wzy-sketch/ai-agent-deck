@@ -734,6 +734,20 @@ static void serial_cmd_task(void *arg)
     }
 }
 
+/* ── 壁纸 ACK 回调：WiFi 通道通过 TCP 发送 ── */
+extern bool wifi_ctrl_send(const char *data, size_t len);
+extern bool wifi_ctrl_has_client(void);
+
+static void wallpaper_ack_to_wifi(const char *data, int len)
+{
+    /* 优先发到 WiFi 客户端 */
+    if (wifi_ctrl_has_client()) {
+        wifi_ctrl_send(data, len);
+    }
+    /* 同时输出到串口（调试/日志） */
+    printf("%s", data);
+}
+
 /* ── 主函数 ──────────────────────────────── */
 void app_main(void)
 {
@@ -770,6 +784,7 @@ void app_main(void)
 
     /* 壁纸系统初始化 */
     wallpaper_init();
+    wallpaper_set_ack_callback(wallpaper_ack_to_wifi);
 
     /* 不重新安装 UART 驱动（避免与控制台冲突） */
     /* 首字节损坏问题通过 strchr(workaround) 解决 */

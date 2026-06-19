@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -19,14 +20,74 @@ static const char *TAG = "WALLPAPER";
 /* ── 全局壁纸状态 ────────────────────────── */
 static wallpaper_t s_wp = {0};
 static volatile bool s_uploading = false;
+static int64_t s_upload_start_time = 0;    /* 上传开始时间 (ms) */
+#define UPLOAD_TIMEOUT_MS  60000            /* 上传超时: 60秒 */
 
-bool wallpaper_is_uploading(void) { return s_uploading; }
+/* ── 重组缓冲区（模块级，便于清理） ──────── */
+static uint8_t *s_reasm_buf = NULL;
+static uint32_t s_reasm_total = 0;
+static uint32_t s_reasm_off = 0;
+
+/* ── Base64 解码缓冲区（内部 RAM，避免栈溢出）── */
+#define CHUNK_BUF_SIZE  1024
+static uint8_t s_chunk_buf[CHUNK_BUF_SIZE];
+
+/* ── ACK 响应回调（由调用方设置） ─────────── */
+static wp_ack_callback_t s_ack_cb = NULL;
+
+void wallpaper_set_ack_callback(wp_ack_callback_t cb)
+{
+    s_ack_cb = cb;
+}
+
+bool wallpaper_is_uploading(void)
+{
+    if (s_uploading) {
+        /* 超时保护：超过 60 秒自动复位 */
+        int64_t elapsed = (esp_timer_get_time() / 1000) - s_upload_start_time;
+        if (elapsed > UPLOAD_TIMEOUT_MS) {
+            ESP_LOGE(TAG, "Upload timeout (%lld ms), auto-reset", (long long)elapsed);
+            s_uploading = false;
+            if (s_reasm_buf) {
+                heap_caps_free(s_reasm_buf);
+                s_reasm_buf = NULL;
+            }
+        }
+    }
+    return s_uploading;
+}
+
+/* ── ACK 发送（通过回调路由） ─────────────── */
+static void send_ack(const char *json_fmt, ...)
+{
+    char buf[256];
+    va_list args;
+    va_start(args, json_fmt);
+    int len = vsnprintf(buf, sizeof(buf) - 2, json_fmt, args);
+    va_end(args);
+
+    /* 确保以 \n 结尾（Manager 按 \n 分割） */
+    if (len > 0 && buf[len - 1] != '\n') {
+        buf[len++] = '\n';
+        buf[len] = '\0';
+    }
+
+    if (s_ack_cb) {
+        s_ack_cb(buf, len);
+    } else {
+        /* 默认: 串口输出 */
+        printf("%s", buf);
+    }
+}
 
 /* ── 初始化 ──────────────────────────────── */
 esp_err_t wallpaper_init(void)
 {
     memset(&s_wp, 0, sizeof(s_wp));
     s_wp.type = WP_TYPE_NONE;
+    s_reasm_buf = NULL;
+    s_reasm_total = 0;
+    s_reasm_off = 0;
     ESP_LOGI(TAG, "Wallpaper init (PSRAM: %d KB free)",
              heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024);
 
@@ -79,6 +140,17 @@ static void free_gif(void)
     s_wp.playing = false;
 }
 
+/* ── 清理重组缓冲区 ──────────────────────── */
+static void cleanup_reasm(void)
+{
+    if (s_reasm_buf) {
+        heap_caps_free(s_reasm_buf);
+        s_reasm_buf = NULL;
+    }
+    s_reasm_total = 0;
+    s_reasm_off = 0;
+}
+
 /* ── 设置静态壁纸 ────────────────────────── */
 esp_err_t wallpaper_set_static(const uint16_t *data, uint32_t len)
 {
@@ -87,11 +159,9 @@ esp_err_t wallpaper_set_static(const uint16_t *data, uint32_t len)
         return ESP_ERR_INVALID_SIZE;
     }
 
-    /* 释放旧壁纸 */
     free_static();
     free_gif();
 
-    /* 分配 PSRAM */
     s_wp.static_pixels = heap_caps_malloc(WP_FRAME_SIZE, MALLOC_CAP_SPIRAM);
     if (!s_wp.static_pixels) {
         ESP_LOGE(TAG, "PSRAM alloc failed for static wallpaper");
@@ -113,11 +183,9 @@ esp_err_t wallpaper_gif_start(uint16_t frame_count)
         return ESP_ERR_INVALID_ARG;
     }
 
-    /* 释放旧壁纸 */
     free_static();
     free_gif();
 
-    /* 分配帧数组 */
     s_wp.frames = heap_caps_calloc(frame_count, sizeof(wp_gif_frame_t), MALLOC_CAP_SPIRAM);
     if (!s_wp.frames) {
         ESP_LOGE(TAG, "PSRAM alloc failed for %d frames", frame_count);
@@ -145,12 +213,10 @@ esp_err_t wallpaper_gif_add_frame(uint16_t frame_idx, const uint16_t *data,
         return ESP_ERR_INVALID_SIZE;
     }
 
-    /* 释放旧帧数据（如果重传） */
     if (s_wp.frames[frame_idx].pixels) {
         heap_caps_free(s_wp.frames[frame_idx].pixels);
     }
 
-    /* 分配帧像素 */
     s_wp.frames[frame_idx].pixels = heap_caps_malloc(WP_FRAME_SIZE, MALLOC_CAP_SPIRAM);
     if (!s_wp.frames[frame_idx].pixels) {
         ESP_LOGE(TAG, "PSRAM alloc failed for frame %d", frame_idx);
@@ -171,7 +237,6 @@ esp_err_t wallpaper_gif_finish(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* 检查所有帧是否已接收 */
     int loaded = 0;
     for (int i = 0; i < s_wp.frame_count; i++) {
         if (s_wp.frames[i].pixels) loaded++;
@@ -191,17 +256,17 @@ esp_err_t wallpaper_gif_finish(void)
     return ESP_OK;
 }
 
-/* ── 清除壁纸 ────────────────────────────── */
 esp_err_t wallpaper_clear(void)
 {
     free_static();
     free_gif();
+    cleanup_reasm();
     s_wp.type = WP_TYPE_NONE;
+    s_uploading = false;
     ESP_LOGI(TAG, "Wallpaper cleared");
     return ESP_OK;
 }
 
-/* ── 帧更新（GIF 自动播放） ──────────────── */
 bool wallpaper_update(void)
 {
     if (s_wp.type != WP_TYPE_GIF || !s_wp.playing || !s_wp.frames) {
@@ -214,13 +279,12 @@ bool wallpaper_update(void)
     if ((now - s_wp.last_frame_time) >= delay) {
         s_wp.current_frame = (s_wp.current_frame + 1) % s_wp.frame_count;
         s_wp.last_frame_time = now;
-        return true;  /* 需要重绘 */
+        return true;
     }
 
     return false;
 }
 
-/* ── 绘制壁纸到屏幕 ─────────────────────── */
 void wallpaper_draw(void)
 {
     switch (s_wp.type) {
@@ -239,14 +303,12 @@ void wallpaper_draw(void)
 
         case WP_TYPE_NONE:
         default:
-            /* 无壁纸，不绘制（由主循环绘制默认渐变） */
             break;
     }
 }
 
-/* ── 串口命令解析 ────────────────────────── */
+/* ── Base64 解码 ─────────────────────────── */
 
-/* Base64 解码表 */
 static const int b64_table[256] = {
     ['A']=0,['B']=1,['C']=2,['D']=3,['E']=4,['F']=5,['G']=6,['H']=7,
     ['I']=8,['J']=9,['K']=10,['L']=11,['M']=12,['N']=13,['O']=14,['P']=15,
@@ -278,6 +340,7 @@ static int base64_decode(const char *src, int src_len, uint8_t *dst, int dst_max
     return out;
 }
 
+/* ── 命令解析 ─────────────────────────────── */
 void wallpaper_parse_cmd(const char *json_str)
 {
     cJSON *root = cJSON_Parse(json_str);
@@ -295,22 +358,22 @@ void wallpaper_parse_cmd(const char *json_str)
     const char *cmd_str = cmd->valuestring;
 
     if (strcmp(cmd_str, "wallpaper_start") == 0) {
-        /* 壁纸传输开始: {"cmd":"wallpaper_start","width":240,"height":240,"size":115200} */
         const cJSON *size = cJSON_GetObjectItem(root, "size");
         if (size && cJSON_IsNumber(size)) {
-            ESP_LOGI(TAG, "Wallpaper upload start: %d bytes", size->valueint);
+            cleanup_reasm();
             s_uploading = true;
-            printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"ready\"}\n");
+            s_upload_start_time = esp_timer_get_time() / 1000;
+            ESP_LOGI(TAG, "Wallpaper upload start: %d bytes", size->valueint);
+            send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"ready\"}");
         }
     }
     else if (strcmp(cmd_str, "wallpaper_end") == 0) {
-        /* 壁纸传输结束 */
         ESP_LOGI(TAG, "Wallpaper upload end");
         s_uploading = false;
-        printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"end\"}\n");
+        cleanup_reasm();
+        send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"end\"}");
     }
     else if (strcmp(cmd_str, "wallpaper_set") == 0) {
-        /* 静态壁纸（完整数据）: {"cmd":"wallpaper_set","data":"<base64>"} */
         const cJSON *data = cJSON_GetObjectItem(root, "data");
         if (data && cJSON_IsString(data)) {
             int b64_len = strlen(data->valuestring);
@@ -321,40 +384,27 @@ void wallpaper_parse_cmd(const char *json_str)
                 ESP_LOGI(TAG, "Wallpaper data: %d base64 -> %d bytes", b64_len, decoded_len);
                 if (decoded_len >= WP_FRAME_SIZE) {
                     wallpaper_set_static((uint16_t *)buf, decoded_len);
-                    printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"ok\"}\n");
+                    send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"ok\"}");
                 } else {
                     ESP_LOGE(TAG, "Image too small: %d < %d", decoded_len, WP_FRAME_SIZE);
-                    printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"error\",\"msg\":\"too_small\"}\n");
+                    send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"error\",\"msg\":\"too_small\"}");
                 }
                 heap_caps_free(buf);
             }
         }
     }
     else if (strcmp(cmd_str, "wp_chunk") == 0) {
-        /* 分块传输: {"cmd":"wp_chunk","off":0,"total":115200,"data":"<base64>"} */
         const cJSON *off = cJSON_GetObjectItem(root, "off");
         const cJSON *total = cJSON_GetObjectItem(root, "total");
         const cJSON *data = cJSON_GetObjectItem(root, "data");
 
         if (off && total && data && cJSON_IsNumber(off) && cJSON_IsNumber(total) && cJSON_IsString(data)) {
-            static uint8_t *s_reasm_buf = NULL;
-            static uint32_t s_reasm_total = 0;
-            static uint32_t s_reasm_off = 0;
-
             uint32_t offset = off->valueint;
             uint32_t total_size = total->valueint;
             int b64_len = strlen(data->valuestring);
-            /* 静态内部 RAM 缓冲区（避免 PSRAM 和栈问题） */
-            static uint8_t chunk_buf[256];
-            int max_decoded = sizeof(chunk_buf);
 
-            /* 首个分块：分配重组缓冲区 */
             if (offset == 0 || s_reasm_buf == NULL) {
-                if (s_reasm_buf) {
-                    heap_caps_free(s_reasm_buf);
-                    s_reasm_buf = NULL;
-                }
-                /* 只有合法的壁纸大小才分配（115200 = 240*240*2） */
+                cleanup_reasm();
                 if (total_size == WP_FRAME_SIZE) {
                     s_reasm_buf = heap_caps_malloc(total_size, MALLOC_CAP_SPIRAM);
                     s_reasm_total = total_size;
@@ -369,44 +419,46 @@ void wallpaper_parse_cmd(const char *json_str)
                 }
             }
 
-            /* 解码到栈缓冲区，再复制到重组缓冲区 */
             if (s_reasm_buf) {
                 int chunk_len = base64_decode(data->valuestring, b64_len,
-                                               chunk_buf, max_decoded);
+                                               s_chunk_buf, CHUNK_BUF_SIZE);
                 if (chunk_len > 0 && offset + chunk_len <= s_reasm_total) {
-                    memcpy(s_reasm_buf + offset, chunk_buf, chunk_len);
+                    memcpy(s_reasm_buf + offset, s_chunk_buf, chunk_len);
                     s_reasm_off = offset + chunk_len;
                     ESP_LOGI(TAG, "Chunk %lu+%d / %lu", (unsigned long)offset, chunk_len, (unsigned long)s_reasm_total);
-                    printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"chunk\",\"off\":%lu}\n", (unsigned long)offset);
+                    send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"chunk\",\"off\":%lu}", (unsigned long)offset);
 
-                    /* 检查是否接收完成 */
                     if (s_reasm_off >= s_reasm_total) {
                         ESP_LOGI(TAG, "Reasm complete, setting wallpaper...");
                         wallpaper_set_static((uint16_t *)s_reasm_buf, s_reasm_total);
-                        heap_caps_free(s_reasm_buf);
-                        s_reasm_buf = NULL;
-                        printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"ok\"}\n");
+                        cleanup_reasm();
+                        s_uploading = false;
+                        send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"ok\"}");
                     }
                 } else {
                     ESP_LOGE(TAG, "Chunk error: len=%d off=%lu total=%lu",
                              chunk_len, (unsigned long)offset, (unsigned long)s_reasm_total);
+                    send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"error\",\"msg\":\"chunk_bounds\"}");
                 }
             } else {
                 ESP_LOGE(TAG, "Reasm buffer not allocated");
+                send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"error\",\"msg\":\"no_buf\"}");
             }
         }
     }
     else if (strcmp(cmd_str, "wallpaper_gif_start") == 0) {
-        /* GIF 开始: {"cmd":"wallpaper_gif_start","frames":N} */
         const cJSON *frames = cJSON_GetObjectItem(root, "frames");
         if (frames && cJSON_IsNumber(frames)) {
-            wallpaper_gif_start(frames->valueint);
-            printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"gif_start\",\"frames\":%d}\n",
-                   frames->valueint);
+            esp_err_t err = wallpaper_gif_start(frames->valueint);
+            if (err == ESP_OK) {
+                send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"gif_start\",\"frames\":%d}",
+                         frames->valueint);
+            } else {
+                send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"error\",\"msg\":\"gif_start_fail\"}");
+            }
         }
     }
     else if (strcmp(cmd_str, "wallpaper_gif_frame") == 0) {
-        /* GIF 帧: {"cmd":"wallpaper_gif_frame","idx":0,"delay":100,"data":"<base64>"} */
         const cJSON *idx = cJSON_GetObjectItem(root, "idx");
         const cJSON *delay = cJSON_GetObjectItem(root, "delay");
         const cJSON *data = cJSON_GetObjectItem(root, "data");
@@ -422,22 +474,22 @@ void wallpaper_parse_cmd(const char *json_str)
                 esp_err_t err = wallpaper_gif_add_frame(idx->valueint, (uint16_t *)buf,
                                                          decoded_len, delay_ms);
                 if (err == ESP_OK) {
-                    printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"frame_ok\",\"idx\":%d}\n",
-                           idx->valueint);
+                    send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"frame_ok\",\"idx\":%d}",
+                             idx->valueint);
+                } else {
+                    send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"error\",\"msg\":\"frame_fail\"}");
                 }
                 heap_caps_free(buf);
             }
         }
     }
     else if (strcmp(cmd_str, "wallpaper_gif_end") == 0) {
-        /* GIF 完成: {"cmd":"wallpaper_gif_end"} */
         wallpaper_gif_finish();
-        printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"gif_end\"}\n");
+        send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"gif_end\"}");
     }
     else if (strcmp(cmd_str, "wallpaper_clear") == 0) {
-        /* 清除壁纸: {"cmd":"wallpaper_clear"} */
         wallpaper_clear();
-        printf("{\"cmd\":\"wallpaper_ack\",\"status\":\"cleared\"}\n");
+        send_ack("{\"cmd\":\"wallpaper_ack\",\"status\":\"cleared\"}");
     }
 
     cJSON_Delete(root);

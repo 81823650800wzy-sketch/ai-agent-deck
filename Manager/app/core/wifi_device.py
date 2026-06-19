@@ -237,6 +237,7 @@ class WiFiDeviceManager:
             return True
         except Exception as e:
             print(f"[WiFi] Send raw error: {e}")
+            self.connected = False
             return False
 
     def send_screen_cmd(self, action: str, screen_id: int = None) -> bool:
@@ -306,6 +307,3 @@ class WiFiDeviceManager:
 
         print("[OTA] Update sent, device will reboot")
         return True
-
-    def is_connected(self) -> bool:
-        return self.connected
